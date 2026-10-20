@@ -1,3 +1,18 @@
 {
-  "_comment": "Curated map: advisory id or alias -> vulnerable callable and severity. Add an entry only after reading the advisory and the fix commit. Unmapped advisories are still scored (conservatively) as reachable with no runtime data."
+  "_comment": "Curated map: advisory id or alias -> vulnerable callable and severity. Add an entry only after reading the advisory and the fix commit. Unmapped advisories are still scored (conservatively) as reachable with no runtime data.",
+  "GHSA-gmj6-6f8f-6699": {
+    "function": "jinja2.compiler.CodeGenerator.visit_FromImport",
+    "severity": "medium",
+    "_evidence": "CVE-2024-56201, fixed in 3.1.5 by pallets/jinja@767b236 (escape template name in the f-string built in visit_FromImport). Reached through dynamic visit_<Node> dispatch, which static analysis cannot follow; runtime hits are the check."
+  },
+  "GHSA-q2x7-8rv6-6q7h": {
+    "function": "jinja2.sandbox.SandboxedEnvironment.call",
+    "severity": "medium",
+    "_evidence": "CVE-2024-56326, fixed in 3.1.5 by pallets/jinja@48b0687 (sandbox indirect calls to str.format). Only SandboxedEnvironment."
+  },
+  "GHSA-cpwx-vrp4-4pq7": {
+    "function": "jinja2.filters.do_attr",
+    "severity": "medium",
+    "_evidence": "CVE-2025-27516, fixed in 3.1.6 by pallets/jinja@90457bb (attr filter uses env.getattr). Only templates using |attr."
+  }
 }

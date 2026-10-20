@@ -39,4 +39,5 @@ def load_advisories(path: Path | None) -> dict[str, dict[str, Any]]:
     if path is None or not path.exists():
         return {}
     data = json.loads(path.read_text(encoding="utf-8"))
-    return {k: v for k, v in data.items() if not k.startswith("_")}
+    return {k: {f: x for f, x in v.items() if not f.startswith("_")}
+            for k, v in data.items() if not k.startswith("_")}

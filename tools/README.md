@@ -10,7 +10,7 @@ Deterministic evidence collectors. They run as CI jobs and write JSON that the D
 | Evidence bundle | `ea-risk bundle` | one JSON per pipeline (`schema: earned-autonomy/bundle/v1`) |
 | Risk engine + ledger | `ea-risk decide` / `outcome` / `state` | score, level, decision id; ledger JSONL; thresholds and per-area penalties |
 | Proof card | `ea-risk decide --proofcard card.md` | MR note markdown with a machine-readable block |
-| Terraform plan | *(next)* | blast radius, risky changes, cost delta |
+| Terraform plan | `ea-tfplan plan.json` (from `terraform show -json`) | `{changes: [{type, resource, risky, reason}], summary, cost_delta_usd_month}` |
 
 The risk rules, levels, safety properties and calibration are in [docs/risk-model.md](../docs/risk-model.md).
 

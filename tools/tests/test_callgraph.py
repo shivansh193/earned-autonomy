@@ -111,3 +111,17 @@ def test_unparseable_module_makes_negative_answer_unknown(tmp_path):
     res = reachability(idx, "somepkg.vuln")
     assert res["reachable"] == "unknown"
     assert res["parse_errors"][0]["module"] == "bad.broken"
+
+
+def test_findings_map_through_aliases_and_keep_unmapped():
+    from callgraph.findings import from_pip_audit, load_advisories
+
+    adv = load_advisories(Path(__file__).parents[1] / "callgraph" / "advisories.json")
+    audit = {"dependencies": [{"name": "jinja2", "version": "3.1.4", "vulns": [
+        {"id": "PYSEC-2026-1475", "aliases": ["CVE-2024-56326", "GHSA-q2x7-8rv6-6q7h"], "fix_versions": ["3.1.5"]},
+        {"id": "GHSA-zzzz-unmapped", "aliases": [], "fix_versions": []}]}]}
+    out = from_pip_audit(audit, adv)
+    assert out[0]["cve"] == "CVE-2024-56326"
+    assert out[0]["function"] == "jinja2.sandbox.SandboxedEnvironment.call"
+    assert "_evidence" not in adv["GHSA-q2x7-8rv6-6q7h"]
+    assert out[1]["function"] is None and out[1]["cve"] == "GHSA-zzzz-unmapped"
