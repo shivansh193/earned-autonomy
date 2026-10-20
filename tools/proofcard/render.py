@@ -34,11 +34,11 @@ def _security(findings: list[dict[str, Any]] | None) -> list[str]:
         hits = f.get("runtime_hits")
         if reach is True and (hits is None or hits > 0):
             verdict = "fix now"
-        elif reach is True or reach in ("possible", "unknown"):
+        elif reach is True or reach in ("possible", "unknown", None):
             verdict = "fix soon (reachable, not exercised)" if reach is True else "review"
         else:
             verdict = "defer, with evidence"
-        reach_txt = {True: "reachable", False: "not reachable", "possible": "possibly", "unknown": "unknown"}.get(reach, _fmt(reach))
+        reach_txt = {True: "reachable", False: "not reachable", "possible": "possibly", "unknown": "unknown"}.get(reach, "unknown (no function mapped)")
         new = {True: "yes", False: "no (pre-existing, not scored)", None: "unknown (scored)"}[f.get("new")]
         out.append(f"| `{f.get('cve')}` {f.get('package')} `{f.get('function')}` | {new} | {f.get('severity')} "
                    f"| {reach_txt} | {_fmt(hits)} | {verdict} |")

@@ -1,0 +1,105 @@
+# Earned Autonomy pipeline.
+#
+# Every change gets evidence, a risk score and an autonomy level:
+#   Hands-off (ship with no human) / Supervised (one approval) / Assisted (approve each step).
+#
+#   secure   dependency-audit-reachability  locked deps -> pip-audit -> "is the vulnerable
+#                                           function reachable from an HTTP route?" (static call graph)
+#   verify   test                           app test suite + our tools' tests (JUnit in the MR widget)
+#            replay-recorded-traffic        this commit's app + fresh Postgres; replay recorded real
+#                                           traffic; diff behaviour; count runtime hits on vulnerable functions
+#   release  autonomy-decision              evidence bundle -> risk score -> level -> proof card on the MR
+#
+# Coming next (see docs/stages.md): package, configure (Terraform plan), deploy/promote by level,
+# monitor (prod replay + rollback), govern (trust ledger + calibration).
+# Rules, levels and calibration: docs/risk-model.md. Scripts: ci/*.sh.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages:
+  - secure
+  - verify
+  - release
+
+variables:
+  UV_VERSION: "0.9.26"
+  PIP_AUDIT_VERSION: "2.9.0"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+  UV_LINK_MODE: copy
+  PYTHONUTF8: "1"
+  # Throwaway CI database; the same test-only values as the committed .env.
+  POSTGRES_DB: app
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: changethis
+  DATABASE_URL: "postgresql://postgres:changethis@postgres:5432/app"
+  EA_USERNAME: admin@example.com
+  EA_PASSWORD: changethis
+
+default:
+  image: python:3.14
+  interruptible: true
+  cache:
+    key:
+      files: [uv.lock]
+    paths: [.uv-cache/]
+  before_script:
+    - bash ci/setup.sh
+    - export PATH="$CI_PROJECT_DIR/.venv/bin:$PATH"
+
+.postgres:
+  services:
+    - name: postgres:18
+      alias: postgres
+
+dependency-audit-reachability:
+  stage: secure
+  variables:
+    GIT_DEPTH: "0"  # the MR's target-branch commit, to tell new findings from pre-existing ones
+  script:
+    - bash ci/secure.sh
+  artifacts:
+    when: always
+    paths: [reports/]
+    expire_in: 30 days
+
+test:
+  stage: verify
+  extends: .postgres
+  needs: []
+  script:
+    - bash ci/verify-tests.sh
+  artifacts:
+    when: always
+    paths: [reports/]
+    reports:
+      junit: [reports/junit.xml, reports/junit-tools.xml]
+    expire_in: 30 days
+
+replay-recorded-traffic:
+  stage: verify
+  extends: .postgres
+  needs: [dependency-audit-reachability]
+  script:
+    - bash ci/verify-replay.sh
+  artifacts:
+    when: always
+    paths: [reports/]
+    expire_in: 30 days
+
+autonomy-decision:
+  stage: release
+  variables:
+    GIT_DEPTH: "0"  # diff against the MR's target branch, mapped to changed functions and routes
+  needs: [dependency-audit-reachability, test, replay-recorded-traffic]
+  script:
+    - bash ci/release-decide.sh
+  artifacts:
+    when: always
+    expose_as: "Autonomy proof card"
+    paths: [reports/proofcard.md, reports/bundle.json]
+    reports:
+      dotenv: reports/decision.env
+    expire_in: 90 days

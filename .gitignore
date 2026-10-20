@@ -14,3 +14,4 @@ tools/.venv314/
 .pytest_cache/
 reports/
 reports-server*.log
+.uv-cache/
