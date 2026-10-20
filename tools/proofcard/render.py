@@ -58,7 +58,8 @@ def _replay(r: dict[str, Any] | None) -> list[str]:
         f"(compared against the {r.get('reference') or 'recording'}).",
         f"- Status mismatches: **{r.get('status_mismatches', 0)}**",
         f"- Body diffs: **{r.get('body_diffs_real', 0)} real**, {r.get('body_diffs_noise', 0)} noise",
-        f"- p95 latency: {_fmt(r.get('p95_ms_before'))} → {_fmt(r.get('p95_ms_after'))} ms",
+        f"- p95 latency: {_fmt(r.get('p95_ms_before'))} → {_fmt(r.get('p95_ms_after'))} ms"
+        + ("" if r.get("latency_comparable") else " (vs. the recording's environment: informational, not scored)"),
     ]
     for d in [d for d in r.get("body_diffs", []) if d.get("verdict") != "noise"][:5]:
         first = d["diffs"][0] if d.get("diffs") else {}
