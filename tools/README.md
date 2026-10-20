@@ -62,3 +62,22 @@ EA_PASSWORD=... ea-replay run --traffic traffic/recorded.jsonl \
 With `--baseline`, the same traffic is replayed against two live deployments (prod vs candidate), and they are compared to each other instead of to the recording.
 
 Exit code: 1 if there are status mismatches, otherwise 0.
+
+### Recording traffic locally
+
+```bash
+# backend with the recorder on (single worker: one writer per traffic file)
+EA_RECORD_FILE=../traffic/recorded.jsonl fastapi run app/main.py --port 8010 --workers 1
+# scripted admin + user sessions against the real API
+EA_USERNAME=admin@example.com EA_PASSWORD=... python -m replay.generate --base-url http://localhost:8010
+```
+
+### Results on the real backend (2026-10-20)
+
+| Run | Requests | Endpoints | Status mismatches | Body diffs |
+|---|---|---|---|---|
+| Replay against a fresh database (every ID different) | 166 | 19 | 0 | 0 |
+| Same database, second run | 166 | 19 | 0 | 3: admin list `count` grew because rows from the first replay were still there (data drift, not a regression) |
+| Build with `read_items` default `limit` 100 → 2 (scenario 4) | 166 | 19 | 0 | 8: every list call relying on the default shrank to 2 items, plus the OpenAPI default; calls passing an explicit `limit` were unaffected |
+
+The second row is why CI replays against a freshly reset database, or uses `--baseline`.

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import sentry_sdk
@@ -33,4 +34,14 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Earned Autonomy: record real traffic for replay (tools/replay). Off unless set.
+if record_file := os.environ.get("EA_RECORD_FILE"):
+    from replay.record import RecordMiddleware
+
+    app.add_middleware(
+        RecordMiddleware,
+        path=record_file,
+        known_secrets={"SUPERUSER_PASSWORD": settings.FIRST_SUPERUSER_PASSWORD},
+    )
 app.frontend("/", directory=FRONTEND_DIR)

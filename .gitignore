@@ -13,3 +13,4 @@ tools/.venv314/
 **/__pycache__/
 .pytest_cache/
 reports/
+reports-server*.log
