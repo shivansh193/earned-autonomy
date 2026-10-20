@@ -6,3 +6,10 @@ backend/app/frontend/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Earned Autonomy tooling
+tools/.venv/
+tools/.venv314/
+**/__pycache__/
+.pytest_cache/
+reports/
