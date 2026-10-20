@@ -6,10 +6,13 @@ Deterministic evidence collectors. They run as CI jobs and write JSON that the D
 |---|---|---|
 | Static reachability | `ea-callgraph reach` / `batch` / `routes` | `{cve, package, function, reachable, routes, paths, possible_paths, parse_errors}` |
 | Traffic replay | `ea-replay run` | `{requests, endpoints, status_mismatches, body_diffs, p95_ms_before, p95_ms_after, per_endpoint, *_details}` |
-| Runtime hits | *(day 2)* | per-function hit counts during replay |
-| Terraform plan | *(day 2)* | blast radius, risky changes, cost delta |
-| Risk engine | *(day 2)* | rule score, level, thresholds |
-| Proof card | *(day 2)* | MR note markdown |
+| Runtime hits | `runtime_hits` (in-app, `EA_HITS_TARGETS` + `EA_HITS_TOKEN`, `GET /__ea/hits`) | `{hits: {function: count}, unresolved}` |
+| Evidence bundle | `ea-risk bundle` | one JSON per pipeline (`schema: earned-autonomy/bundle/v1`) |
+| Risk engine + ledger | `ea-risk decide` / `outcome` / `state` | score, level, decision id; ledger JSONL; thresholds and per-area penalties |
+| Proof card | `ea-risk decide --proofcard card.md` | MR note markdown with a machine-readable block |
+| Terraform plan | *(next)* | blast radius, risky changes, cost delta |
+
+The risk rules, levels, safety properties and calibration are in [docs/risk-model.md](../docs/risk-model.md).
 
 ## Setup
 

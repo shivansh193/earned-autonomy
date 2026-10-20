@@ -44,4 +44,13 @@ if record_file := os.environ.get("EA_RECORD_FILE"):
         path=record_file,
         known_secrets={"SUPERUSER_PASSWORD": settings.FIRST_SUPERUSER_PASSWORD},
     )
+
+# Earned Autonomy: count calls to vulnerable functions during replay (tools/runtime_hits).
+# Off unless both EA_HITS_TARGETS and EA_HITS_TOKEN are set.
+if os.environ.get("EA_HITS_TARGETS") and (hits_token := os.environ.get("EA_HITS_TOKEN")):
+    from runtime_hits import HitCounter, HitsEndpoint
+
+    hit_counter = HitCounter.from_env()
+    if hit_counter is not None:
+        app.add_middleware(HitsEndpoint, counter=hit_counter.start(), token=hits_token)
 app.frontend("/", directory=FRONTEND_DIR)
