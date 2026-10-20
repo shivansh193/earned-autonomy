@@ -204,6 +204,7 @@ def test_cli_decide_records_and_writes_card(tmp_path):
     did = out["provenance"]["decision_id"]
     assert f"EA_DECISION_ID={did}" in env.read_text()
     assert "Autonomy: Hands-off" in card.read_text(encoding="utf-8")
+    assert out["proofcard_markdown"] == card.read_text(encoding="utf-8")
     assert risk_main(["outcome", "--ledger", str(led), "--decision-id", did, "--result", "rollback", "--seconds", "41"]) == 0
     assert ledger.state(ledger.load(led))["thresholds"]["hands_off_max"] == 0.15
 
