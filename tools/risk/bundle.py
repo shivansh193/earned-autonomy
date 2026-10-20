@@ -177,6 +177,7 @@ def replay_summary(report: dict[str, Any] | None, verdicts: list[dict[str, Any]]
         "body_diffs": diffs[:20],
         "p95_ms_before": report.get("p95_ms_before"),
         "p95_ms_after": report.get("p95_ms_after"),
+        "latency_comparable": report.get("latency_comparable", False),
         "latency_regression": report.get("latency_regression", False),
     }
 

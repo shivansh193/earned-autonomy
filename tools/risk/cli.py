@@ -81,9 +81,12 @@ def cmd_decide(a: argparse.Namespace) -> int:
     if a.record:
         entry = ledger.append(a.ledger, ledger.decision_entry(bundle, result))
         bundle["provenance"]["decision_id"] = entry["id"]
-    _write(a.out, bundle)
     if a.proofcard:
-        _write(a.proofcard, render(bundle, audit_url=a.audit_url))
+        card = render(bundle, audit_url=a.audit_url)
+        _write(a.proofcard, card)
+        # Agents read artifacts through a JSON-only API tool, so the card travels in the bundle too.
+        bundle["proofcard_markdown"] = card
+    _write(a.out, bundle)
     sys.stderr.write(f"level={result['autonomy']['level']} risk={result['risk']['final']}\n")
     if a.dotenv:  # for GitLab CI `artifacts:reports:dotenv`
         a.dotenv.write_text(

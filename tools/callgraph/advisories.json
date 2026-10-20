@@ -1,0 +1,3 @@
+{
+  "_comment": "Curated map: advisory id or alias -> vulnerable callable and severity. Add an entry only after reading the advisory and the fix commit. Unmapped advisories are still scored (conservatively) as reachable with no runtime data."
+}

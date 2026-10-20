@@ -68,7 +68,18 @@ def main(argv: list[str] | None = None) -> int:
     _common(p_batch)
     p_batch.add_argument("--findings", type=Path, required=True)
 
+    p_find = sub.add_parser("findings", help="pip-audit JSON -> findings for `batch`")
+    p_find.add_argument("--pip-audit", type=Path, required=True)
+    p_find.add_argument("--advisories", type=Path, default=Path(__file__).with_name("advisories.json"))
+
     args = parser.parse_args(argv)
+    if args.cmd == "findings":
+        from callgraph.findings import from_pip_audit, load_advisories
+
+        audit = json.loads(args.pip_audit.read_text(encoding="utf-8"))
+        json.dump(from_pip_audit(audit, load_advisories(args.advisories)), sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return 0
     if args.cmd == "routes":
         out: object = list_routes(_index(args))
     elif args.cmd == "reach":

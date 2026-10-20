@@ -34,11 +34,11 @@ def _security(findings: list[dict[str, Any]] | None) -> list[str]:
         hits = f.get("runtime_hits")
         if reach is True and (hits is None or hits > 0):
             verdict = "fix now"
-        elif reach is True or reach in ("possible", "unknown"):
+        elif reach is True or reach in ("possible", "unknown", None):
             verdict = "fix soon (reachable, not exercised)" if reach is True else "review"
         else:
             verdict = "defer, with evidence"
-        reach_txt = {True: "reachable", False: "not reachable", "possible": "possibly", "unknown": "unknown"}.get(reach, _fmt(reach))
+        reach_txt = {True: "reachable", False: "not reachable", "possible": "possibly", "unknown": "unknown"}.get(reach, "unknown (no function mapped)")
         new = {True: "yes", False: "no (pre-existing, not scored)", None: "unknown (scored)"}[f.get("new")]
         out.append(f"| `{f.get('cve')}` {f.get('package')} `{f.get('function')}` | {new} | {f.get('severity')} "
                    f"| {reach_txt} | {_fmt(hits)} | {verdict} |")
@@ -58,7 +58,8 @@ def _replay(r: dict[str, Any] | None) -> list[str]:
         f"(compared against the {r.get('reference') or 'recording'}).",
         f"- Status mismatches: **{r.get('status_mismatches', 0)}**",
         f"- Body diffs: **{r.get('body_diffs_real', 0)} real**, {r.get('body_diffs_noise', 0)} noise",
-        f"- p95 latency: {_fmt(r.get('p95_ms_before'))} → {_fmt(r.get('p95_ms_after'))} ms",
+        f"- p95 latency: {_fmt(r.get('p95_ms_before'))} → {_fmt(r.get('p95_ms_after'))} ms"
+        + ("" if r.get("latency_comparable") else " (vs. the recording's environment: informational, not scored)"),
     ]
     for d in [d for d in r.get("body_diffs", []) if d.get("verdict") != "noise"][:5]:
         first = d["diffs"][0] if d.get("diffs") else {}

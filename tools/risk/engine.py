@@ -69,7 +69,7 @@ def rule_score(bundle: dict[str, Any], rules: Rules | None = None) -> Score:
             # listed on the card and handled by the Triage flow's fix MR instead.
             continue
         exercised = hits is None or hits > 0  # no runtime data: assume exercised
-        if reach is True or reach == "unknown":
+        if reach is True or reach in ("unknown", None):  # None: no vulnerable function mapped
             if exercised:
                 pts = r.reachable_hit_high if sev in HIGH else r.reachable_hit_other
                 why = "no runtime data" if hits is None else f"{hits} runtime hits"
