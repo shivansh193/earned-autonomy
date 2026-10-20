@@ -128,3 +128,15 @@ def test_cli_exit_code(tmp_path, monkeypatch):
                    "--secret", f"SUPERUSER_PASSWORD={PW}", "--out", str(out)])
     assert rc == 0
     assert json.loads(out.read_text())["status_mismatches"] == 0
+
+
+def test_latency_only_flagged_against_a_baseline(tmp_path):
+    exs = load(record_session(tmp_path, FakeApp(PW)))
+    for e in exs:
+        e.latency_ms = 0.01  # recording made on a much faster machine
+    secrets = {"SUPERUSER_PASSWORD": PW}
+    rep = compare(exs, replay(exs, "http://t", secrets=secrets, client=asgi_client(FakeApp(PW))))
+    assert rep["latency_comparable"] is False and rep["latency_regression"] is False
+    base = replay(exs, "http://b", secrets=secrets, client=asgi_client(FakeApp(PW)))
+    rep2 = compare(exs, replay(exs, "http://t", secrets=secrets, client=asgi_client(FakeApp(PW))), base)
+    assert rep2["latency_comparable"] is True

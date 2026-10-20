@@ -213,7 +213,10 @@ def compare(
             )
 
     p95_before, p95_after = _pct(ref_lat, 95), _pct(cand_lat, 95)
-    latency_regression = bool(p95_before and p95_after and p95_after > 1.2 * p95_before)
+    # Only a baseline run is measured in the same environment as the candidate; the
+    # recording's latencies come from wherever it was captured, so they're informational.
+    latency_comparable = baseline is not None
+    latency_regression = bool(latency_comparable and p95_before and p95_after and p95_after > 1.2 * p95_before)
     return {
         "reference": "baseline" if baseline else "recording",
         "target": candidate.base_url,
@@ -227,6 +230,7 @@ def compare(
         "p95_ms_before": p95_before,
         "p50_ms_after": _pct(cand_lat, 50),
         "p95_ms_after": p95_after,
+        "latency_comparable": latency_comparable,
         "latency_regression": latency_regression,
         "per_endpoint": endpoints,
         "status_mismatch_details": status_mismatches,
