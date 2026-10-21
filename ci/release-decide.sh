@@ -14,6 +14,11 @@ else
   git diff --name-only HEAD~1 HEAD > reports/changed.txt || true
   bundle_args+=(--changed-files reports/changed.txt)
 fi
+# CONFIGURE evidence: the terraform plan job (once infra/ exists) leaves reports/plan.json.
+if [ -f reports/plan.json ]; then
+  ea-tfplan reports/plan.json > reports/infra.json
+  bundle_args+=(--infra reports/infra.json)
+fi
 [ -f reports/agent.json ] && agent=(--agent reports/agent.json) || agent=()
 
 ea-risk bundle "${bundle_args[@]}"
