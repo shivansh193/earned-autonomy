@@ -1,0 +1,31 @@
+# Prod promotion job template, included by the child pipeline that ci/route.sh
+# generates. `when` (automatic vs manual approval) is set there from the MR's
+# autonomy:: label.
+stages: [deploy-prod]
+
+variables:
+  GCP_PROJECT: mercurial-lamp-512205-q5
+  GCP_PROJECT_NUMBER: "864260570183"
+  GCP_REGION: us-central1
+  GCP_DEPLOYER_SA: gitlab-deployer@mercurial-lamp-512205-q5.iam.gserviceaccount.com
+
+.promote-prod:
+  stage: deploy-prod
+  interruptible: false  # never cancel a terraform apply halfway
+  image:
+    name: hashicorp/terraform:1.9.8
+    entrypoint: [""]
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
+  environment:
+    name: production
+    url: $PROD_URL
+  script:
+    - echo "promoting ${EA_IMAGE} to production (autonomy level ${EA_LEVEL})"
+    - sh ci/deploy.sh prod "$EA_IMAGE"
+  artifacts:
+    when: always
+    paths: [reports/]
+    reports:
+      dotenv: reports/deploy-prod.env

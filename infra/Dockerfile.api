@@ -1,0 +1,22 @@
+# Backend API image for Cloud Run (the upstream backend/Dockerfile also builds the
+# React frontend, which this project doesn't deploy). Build context: repo root.
+FROM python:3.14-slim
+
+ENV PYTHONUNBUFFERED=1 UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH"
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+COPY backend/pyproject.toml backend/alembic.ini backend/
+RUN uv sync --frozen --no-dev --package app --no-install-workspace
+
+COPY backend/app backend/app
+COPY backend/scripts backend/scripts
+COPY tools tools
+RUN uv sync --frozen --no-dev --package app \
+ && uv pip install --no-deps -e tools \
+ && mkdir -p backend/app/frontend
+
+WORKDIR /app/backend
+# Migrate, ensure the first superuser, then serve. Cloud Run sets PORT.
+CMD ["sh", "-c", "alembic upgrade head && python app/initial_data.py && exec fastapi run app/main.py --host 0.0.0.0 --port ${PORT:-8080} --workers 1"]
