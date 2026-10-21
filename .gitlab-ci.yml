@@ -8,10 +8,13 @@
 #   verify   test                           app test suite + our tools' tests (JUnit in the MR widget)
 #            replay-recorded-traffic        this commit's app + fresh Postgres; replay recorded real
 #                                           traffic; diff behaviour; count runtime hits on vulnerable functions
+#   configure configure-plan               terraform plan (MRs touching infra/) -> risky changes + cost delta
 #   release  autonomy-decision              evidence bundle -> risk score -> level -> proof card on the MR
 #
-# Coming next (see docs/stages.md): package, configure (Terraform plan), deploy/promote by level,
-# monitor (prod replay + rollback), govern (trust ledger + calibration).
+# After merge (main): package-image -> deploy-staging (Terraform, Cloud Run) -> route-by-autonomy
+#   (reads the merged MR's autonomy:: label) -> promote-production: automatic for Hands-off,
+#   a manual approval job for Supervised/Assisted. Auth: GitLab OIDC -> Workload Identity, no keys.
+# Coming next (see docs/stages.md): monitor (prod replay + rollback), govern (ledger from CI).
 # Rules, levels and calibration: docs/risk-model.md. Scripts: ci/*.sh.
 
 workflow:
@@ -21,8 +24,13 @@ workflow:
 
 stages:
   - secure
+  - configure
   - verify
   - release
+  - package
+  - deploy-staging
+  - route
+  - promote
 
 variables:
   UV_VERSION: "0.9.26"
@@ -37,6 +45,13 @@ variables:
   DATABASE_URL: "postgresql://postgres:changethis@postgres:5432/app"
   EA_USERNAME: admin@example.com
   EA_PASSWORD: changethis
+  # Google Cloud (not secrets: access is granted by Workload Identity Federation to
+  # this project's CI jobs only; see infra/bootstrap.sh).
+  GCP_PROJECT: mercurial-lamp-512205-q5
+  GCP_PROJECT_NUMBER: "864260570183"
+  GCP_REGION: us-central1
+  GCP_DEPLOYER_SA: gitlab-deployer@mercurial-lamp-512205-q5.iam.gserviceaccount.com
+  IMAGE_REPO: us-central1-docker.pkg.dev/mercurial-lamp-512205-q5/earned-autonomy/api
 
 default:
   image: python:3.14
@@ -93,7 +108,12 @@ autonomy-decision:
   stage: release
   variables:
     GIT_DEPTH: "0"  # diff against the MR's target branch, mapped to changed functions and routes
-  needs: [dependency-audit-reachability, test, replay-recorded-traffic]
+  needs:
+    - dependency-audit-reachability
+    - test
+    - replay-recorded-traffic
+    - job: configure-plan
+      optional: true
   script:
     - bash ci/release-decide.sh
   artifacts:
@@ -103,3 +123,101 @@ autonomy-decision:
     reports:
       dotenv: reports/decision.env
     expire_in: 90 days
+
+configure-plan:
+  stage: configure
+  extends: .gcp-oidc
+  image:
+    name: hashicorp/terraform:1.9.8
+    entrypoint: [""]
+  cache: []
+  before_script: []
+  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: [infra/**/*]
+  script:
+    - sh ci/plan.sh
+  artifacts:
+    when: always
+    paths: [reports/plan.json]
+    expire_in: 30 days
+
+# ---------------------------------------------------------------- after merge (main)
+# package -> deploy staging -> route by the merged MR's autonomy:: label -> promote prod
+
+.main-only:
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+.gcp-oidc:
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
+
+package-image:
+  extends: [.main-only, .gcp-oidc]
+  stage: package
+  image: docker:27
+  services: [docker:27-dind]
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  cache: []
+  before_script: []
+  needs: []
+  script:
+    - apk add -q --no-cache curl jq
+    - . ci/gcp-token.sh
+    - echo "$GCP_ACCESS_TOKEN" | docker login -u oauth2accesstoken --password-stdin "https://${GCP_REGION}-docker.pkg.dev"
+    - docker build -f infra/Dockerfile.api -t "${IMAGE_REPO}:${CI_COMMIT_SHA}" .
+    - docker push -q "${IMAGE_REPO}:${CI_COMMIT_SHA}"
+    - mkdir -p reports
+    - echo "EA_IMAGE=$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REPO}:${CI_COMMIT_SHA}")" | tee reports/image.env
+  artifacts:
+    reports:
+      dotenv: reports/image.env
+
+deploy-staging:
+  extends: [.main-only, .gcp-oidc]
+  stage: deploy-staging
+  image:
+    name: hashicorp/terraform:1.9.8
+    entrypoint: [""]
+  cache: []
+  before_script: []
+  needs: [package-image]
+  interruptible: false  # never cancel a terraform apply halfway
+  environment:
+    name: staging
+    url: $STAGING_URL
+  script:
+    - sh ci/deploy.sh staging "$EA_IMAGE"
+  artifacts:
+    when: always
+    paths: [reports/]
+    reports:
+      dotenv: reports/deploy-staging.env
+
+route-by-autonomy:
+  extends: .main-only
+  stage: route
+  image: alpine:3.20
+  cache: []
+  before_script: []
+  needs: [package-image, deploy-staging]
+  script:
+    - sh ci/route.sh
+  artifacts:
+    paths: [reports/promote.yml, reports/route.env]
+    reports:
+      dotenv: reports/route.env
+
+promote-production:
+  extends: .main-only
+  stage: promote
+  needs: [route-by-autonomy]
+  trigger:
+    include:
+      - artifact: reports/promote.yml
+        job: route-by-autonomy
+    strategy: depend
