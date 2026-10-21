@@ -31,5 +31,10 @@ promote-prod:
   variables:
     EA_LEVEL: "${LEVEL}"
     EA_IMAGE: "${EA_IMAGE}"
+monitor-prod:
+  extends: .monitor-prod
+  variables:
+    EA_MR: "${MR}"
+    EA_LEVEL: "${LEVEL}"
 EOF
 cat reports/promote.yml

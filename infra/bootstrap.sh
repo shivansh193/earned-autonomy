@@ -62,6 +62,13 @@ for s in "${SECRETS[@]}"; do
   fi
 done
 
+# Deployer: read ONLY the canary account's password (a normal, non-admin user the
+# post-deploy monitor logs in as; see infra/seed_canary.py).
+if exists gcloud secrets describe ea-canary-password --project="$PROJECT"; then
+  gcloud secrets add-iam-policy-binding ea-canary-password --project="$PROJECT" \
+    --member="serviceAccount:${DEPLOYER_SA}" --role=roles/secretmanager.secretAccessor >/dev/null
+fi
+
 # Workload Identity Federation for GitLab.com CI.
 exists gcloud iam workload-identity-pools describe "$POOL" --location=global --project="$PROJECT" ||
   gcloud iam workload-identity-pools create "$POOL" --location=global --project="$PROJECT" \
