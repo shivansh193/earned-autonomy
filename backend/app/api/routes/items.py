@@ -12,7 +12,7 @@ router = APIRouter(prefix="/items", tags=["items"])
 
 @router.get("/", response_model=ItemsPublic)
 def read_items(
-    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 20
+    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 50
 ) -> Any:
     """
     Retrieve items.
