@@ -1,0 +1,7 @@
+{"auth_ref": null, "body": {"password": "${CANARY_PASSWORD}", "username": "canary@example.com"}, "content_type": "application/x-www-form-urlencoded", "latency_ms": 0.0, "method": "POST", "path": "/api/v1/login/access-token", "query": "", "response": {"access_token": "<redacted>", "token_type": "bearer"}, "seq": 1, "status": 200}
+{"auth_ref": 1, "body": null, "content_type": null, "latency_ms": 0.0, "method": "GET", "path": "/api/v1/users/me", "query": "", "response": null, "seq": 2, "status": 200}
+{"auth_ref": 1, "body": null, "content_type": null, "latency_ms": 0.0, "method": "GET", "path": "/api/v1/items/", "query": "", "response": null, "seq": 3, "status": 200}
+{"auth_ref": 1, "body": null, "content_type": null, "latency_ms": 0.0, "method": "GET", "path": "/api/v1/items/", "query": "skip=0&limit=50", "response": null, "seq": 4, "status": 200}
+{"auth_ref": 1, "body": null, "content_type": null, "latency_ms": 0.0, "method": "GET", "path": "/api/v1/items/", "query": "skip=100&limit=100", "response": null, "seq": 5, "status": 200}
+{"auth_ref": null, "body": null, "content_type": null, "latency_ms": 0.0, "method": "GET", "path": "/api/v1/utils/health-check/", "query": "", "response": null, "seq": 6, "status": 200}
+{"auth_ref": 1, "body": null, "content_type": null, "latency_ms": 0.0, "method": "GET", "path": "/api/v1/items/00000000-0000-0000-0000-000000000000", "query": "", "response": null, "seq": 7, "status": 404}

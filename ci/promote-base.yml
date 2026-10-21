@@ -1,13 +1,14 @@
 # Prod promotion job template, included by the child pipeline that ci/route.sh
 # generates. `when` (automatic vs manual approval) is set there from the MR's
 # autonomy:: label.
-stages: [deploy-prod]
+stages: [deploy-prod, monitor-prod]
 
 variables:
   GCP_PROJECT: mercurial-lamp-512205-q5
   GCP_PROJECT_NUMBER: "864260570183"
   GCP_REGION: us-central1
   GCP_DEPLOYER_SA: gitlab-deployer@mercurial-lamp-512205-q5.iam.gserviceaccount.com
+  EA_LEDGER_BUCKET: mercurial-lamp-512205-q5-tfstate
 
 .promote-prod:
   stage: deploy-prod
@@ -29,3 +30,22 @@ variables:
     paths: [reports/]
     reports:
       dotenv: reports/deploy-prod.env
+
+# MONITOR: compare the new prod revision with the previous one on the same prod data
+# (canary replay); on any difference roll back automatically, record the outcome in
+# the trust ledger, and fail so the Rollback agent opens an incident.
+.monitor-prod:
+  stage: monitor-prod
+  interruptible: false
+  image: python:3.14-slim
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
+  needs: [promote-prod]
+  script:
+    - pip install -q --root-user-action=ignore ./tools
+    - ea-monitor --service api-prod --traffic traffic/canary.jsonl --out reports/monitor.json
+  artifacts:
+    when: always
+    paths: [reports/monitor.json]
+    expire_in: 90 days

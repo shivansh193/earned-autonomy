@@ -14,7 +14,10 @@
 # After merge (main): package-image -> deploy-staging (Terraform, Cloud Run) -> route-by-autonomy
 #   (reads the merged MR's autonomy:: label) -> promote-production: automatic for Hands-off,
 #   a manual approval job for Supervised/Assisted. Auth: GitLab OIDC -> Workload Identity, no keys.
-# Coming next (see docs/stages.md): monitor (prod replay + rollback), govern (ledger from CI).
+#   Then monitor-prod: canary replay of the new prod revision vs the previous one on the same
+#   prod data; any difference -> automatic rollback (traffic pinned to previous), outcome written
+#   to the trust ledger in GCS (gs://$EA_LEDGER_BUCKET/trust/ledger.jsonl), job fails -> the
+#   Rollback agent (Duo flow, pipeline failed) opens an incident. Every MR decision reads that ledger.
 # Rules, levels and calibration: docs/risk-model.md. Scripts: ci/*.sh.
 
 workflow:
@@ -52,6 +55,7 @@ variables:
   GCP_REGION: us-central1
   GCP_DEPLOYER_SA: gitlab-deployer@mercurial-lamp-512205-q5.iam.gserviceaccount.com
   IMAGE_REPO: us-central1-docker.pkg.dev/mercurial-lamp-512205-q5/earned-autonomy/api
+  EA_LEDGER_BUCKET: mercurial-lamp-512205-q5-tfstate  # trust ledger: gs://<bucket>/trust/ledger.jsonl
 
 default:
   image: python:3.14
@@ -106,6 +110,9 @@ replay-recorded-traffic:
 
 autonomy-decision:
   stage: release
+  id_tokens:  # read the shared trust ledger from GCS (keyless)
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
   variables:
     GIT_DEPTH: "0"  # diff against the MR's target branch, mapped to changed functions and routes
   needs:

@@ -21,6 +21,12 @@ if [ -f reports/plan.json ]; then
 fi
 [ -f reports/agent.json ] && agent=(--agent reports/agent.json) || agent=()
 
+# GOVERN: decisions use the shared trust ledger (outcomes of past releases) from GCS.
+if [ -n "${EA_LEDGER_BUCKET:-}" ] && [ -n "${GITLAB_OIDC_TOKEN:-}" ]; then
+  ea-ledger pull --bucket "$EA_LEDGER_BUCKET" --out .trust/ledger.jsonl || echo "ledger pull failed; using the repo copy"
+fi
+ea-risk state --ledger .trust/ledger.jsonl | python -c "import json,sys; s=json.load(sys.stdin); print('trust:', json.dumps({'thresholds': s['thresholds'], 'area_penalties': s['area_penalties']}))"
+
 ea-risk bundle "${bundle_args[@]}"
 ea-risk decide --bundle reports/bundle.json --ledger .trust/ledger.jsonl "${agent[@]}" \
   --out reports/bundle.json --proofcard reports/proofcard.md --dotenv reports/decision.env \
