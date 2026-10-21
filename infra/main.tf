@@ -40,7 +40,7 @@ resource "google_cloud_run_v2_service" "api" {
   template {
     service_account                  = local.runtime_sa
     max_instance_request_concurrency = 40
-    timeout                          = "60s"
+    timeout                          = "120s" # first request after scale-to-zero waits for a cold start instead of failing
 
     scaling {
       min_instance_count = 0 # scale to zero: pay only while serving
@@ -58,7 +58,7 @@ resource "google_cloud_run_v2_service" "api" {
         http_get { path = "/api/v1/utils/health-check/" }
         initial_delay_seconds = 2
         period_seconds        = 3
-        failure_threshold     = 20
+        failure_threshold     = 40 # ~122 s: migrations + Neon wake-up on a cold start
       }
 
       env {

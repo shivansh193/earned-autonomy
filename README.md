@@ -50,9 +50,9 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 | Create | MRs from people and agents; Triage flow opens fix MRs 🚧 | Triage agent |
 | Secure | dependency audit + **static reachability** of each vulnerable function ✅ | rules; Triage agent 🚧 |
 | Verify | 58 app tests + **replay of 166 recorded real requests** against a fresh database, with **runtime hit counts** ✅ | rules; Validation agent 🚧 |
-| Package | image, registry, SBOM 🚧 | — |
-| Configure | Terraform plan → blast radius, risky changes, cost delta (parser ✅, GCP plan 🚧) | rules; Infra agent 🚧 |
-| Release | bundle → risk → level → **proof card**; **Autonomy Router flow** ✅ | rule floor + Router agent |
+| Package | backend image → Artifact Registry ✅ | deterministic |
+| Configure | `terraform plan` on MRs touching `infra/` → risky changes, cost delta ✅ | rules; Infra agent 🚧 |
+| Release | bundle → risk → level → **proof card**; **Autonomy Router flow**; after merge, staging deploy and prod promotion **routed by level** (automatic / manual approval) ✅ | rule floor + Router agent |
 | Monitor | prod replay + health, rollback by traffic shift 🚧 | Rollback agent |
 | Govern | audit record per decision; **trust ledger + calibration** (logic ✅, CI recording 🚧) | deterministic |
 
@@ -62,7 +62,11 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 - **MR [!1](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/1)**: the platform probe. What we verified about Duo flows before building on them ([docs/verification-notes.md](docs/verification-notes.md)).
 - The four demo scenarios and their status: [docs/demo-script.md](docs/demo-script.md).
 
-Live URLs: 🚧 (Google Cloud Run deploy in progress).
+**Live (Google Cloud Run, scale to zero, so the first request after a quiet period takes ~25 s):**
+
+- Production API: https://api-prod-gkozang2ta-uc.a.run.app/docs
+- Staging API: https://api-staging-gkozang2ta-uc.a.run.app/docs
+- MR [!4](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/4): the infrastructure itself went through the loop. The Terraform plan grants public access, so the Router labelled it **Assisted**; a person merged it and approved the production job.
 
 ## Results so far (real runs only)
 
@@ -118,7 +122,7 @@ In GitLab, every MR runs the pipeline. With the `ea-autonomy-router` flow enable
 - The advisory → vulnerable-function map is curated by hand from fix commits; unmapped advisories are scored conservatively.
 - Replay compares against a recording; latency is only scored against a baseline run in the same environment.
 - GitLab Duo `HumanInputComponent` pauses but did not resume after approval in our tests, so human gates use GitLab MR approvals.
-- Not built yet: deploy/monitor/rollback (Google Cloud), Triage, Validation, Infra and Planning flows, and ledger recording from CI.
+- Not built yet: monitor and rollback, the Triage, Validation, Infra and Planning flows, and ledger recording from CI.
 
 ## License and attribution
 
