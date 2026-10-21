@@ -26,10 +26,14 @@ echo "prod    -> ${PROD_IMAGE}"
 
 cd infra
 terraform init -input=false -no-color >/dev/null
+# Only touch this environment's resources: prod changes only in the promote job,
+# behind the gate the autonomy level chose.
 terraform apply -input=false -no-color -auto-approve \
+  -target="google_cloud_run_v2_service.api[\"${ENV_NAME}\"]" \
+  -target="google_cloud_run_v2_service_iam_member.public[\"${ENV_NAME}\"]" \
   -var "staging_image=${STAGING_IMAGE}" -var "prod_image=${PROD_IMAGE}"
-STAGING_URL=$(terraform output -json urls | jq -r .staging)
-PROD_URL=$(terraform output -json urls | jq -r .prod)
+STAGING_URL=$(terraform output -json urls | jq -r '.staging // empty')
+PROD_URL=$(terraform output -json urls | jq -r '.prod // empty')
 cd ..
 printf 'STAGING_URL=%s\nPROD_URL=%s\nDEPLOYED_IMAGE=%s\n' "$STAGING_URL" "$PROD_URL" "$NEW_IMAGE" > "reports/deploy-${ENV_NAME}.env"
 cat "reports/deploy-${ENV_NAME}.env"
