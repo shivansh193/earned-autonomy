@@ -73,6 +73,12 @@ def decision_from(bundle: dict[str, Any] | None, mr: str | None, level: str | No
         entry = ledger.decision_entry({"mr_iid": int(mr) if mr and mr.isdigit() else None, "areas": ["files:unknown"]},
                                       {"risk": {"final": None, "rule_score": None},
                                        "autonomy": {"level": (level or "unknown").replace("-", "_"), "thresholds": {}}})
+    # Record the level that was actually enforced (the Router may have raised the rule
+    # engine's level); calibration must tighten the threshold of the level that shipped.
+    enforced = (level or "").replace("-", "_")
+    if enforced in {"hands_off", "supervised", "assisted", "blocked"}:
+        entry["rule_level"] = entry["level"]
+        entry["level"] = enforced
     entry["commit"] = os.environ.get("CI_COMMIT_SHA", entry.get("commit"))
     entry["deployed_pipeline_id"] = os.environ.get("CI_PIPELINE_ID")
     return entry

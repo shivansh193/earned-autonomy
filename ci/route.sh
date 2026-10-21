@@ -14,9 +14,11 @@ LEVEL=$(curl -sf "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/commits/
 MR=$(curl -sf "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/commits/${CI_COMMIT_SHA}/merge_requests" |
   jq -r '[.[] | select(.state == "merged") | .iid] | first // "none"')
 
+# A manual promotion is a blocking approval gate (allow_failure: false), so the
+# pipeline waits for the person and monitor-prod runs right after the click.
 case "$LEVEL" in
-  hands-off) WHEN=on_success ;;
-  *)         WHEN=manual ;;
+  hands-off) WHEN=on_success; ALLOW_FAILURE=false ;;
+  *)         WHEN=manual;     ALLOW_FAILURE=false ;;
 esac
 echo "MR !${MR}: autonomy=${LEVEL} -> prod promotion when=${WHEN}"
 printf 'EA_ROUTED_LEVEL=%s\nEA_ROUTED_MR=%s\n' "$LEVEL" "$MR" > reports/route.env
@@ -28,6 +30,7 @@ include:
 promote-prod:
   extends: .promote-prod
   when: ${WHEN}
+  allow_failure: ${ALLOW_FAILURE}
   variables:
     EA_LEVEL: "${LEVEL}"
     EA_IMAGE: "${EA_IMAGE}"
