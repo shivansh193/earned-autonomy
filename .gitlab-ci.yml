@@ -109,8 +109,41 @@ replay-recorded-traffic:
     paths: [reports/]
     expire_in: 30 days
 
+# VERIFY (frontend): lint, type-check and build the React app, then run the template's
+# Playwright tests against the backend serving that build.
+frontend-check:
+  stage: verify
+  image: oven/bun:1.3
+  needs: []
+  cache: []
+  before_script: []
+  script:
+    - bun install --frozen-lockfile
+    - cd frontend && bunx biome lint --no-errors-on-unmatched --files-ignore-unknown=true ./ && bun run build
+  artifacts:
+    paths: [backend/app/frontend/]
+    expire_in: 7 days
+
+frontend-e2e:
+  stage: verify
+  image: mcr.microsoft.com/playwright:v1.63.0-noble
+  extends: .postgres
+  needs: [frontend-check]
+  cache: []
+  before_script: []
+  script:
+    - bash ci/verify-frontend-e2e.sh
+  artifacts:
+    when: always
+    paths: [reports/]
+    reports:
+      junit: reports/junit-frontend.xml
+    expire_in: 30 days
+
 autonomy-decision:
   stage: release
+  # Runs even when tests fail: failing tests are evidence (the level becomes Blocked).
+  when: always
   id_tokens:  # read the shared trust ledger from GCS (keyless)
     GITLAB_OIDC_TOKEN:
       aud: https://gitlab.com
@@ -120,6 +153,7 @@ autonomy-decision:
     - dependency-audit-reachability
     - test
     - replay-recorded-traffic
+    - frontend-e2e
     - job: configure-plan
       optional: true
   script:

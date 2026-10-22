@@ -237,6 +237,25 @@ def replay_summary(report: dict[str, Any] | None, verdicts: list[dict[str, Any]]
     }
 
 
+def ui_areas(changed_files: list[str]) -> list[str]:
+    """frontend/src/routes/_layout/items.tsx -> ui:/items; other frontend sources -> ui:shared."""
+    out: set[str] = set()
+    for f in changed_files:
+        if not f.startswith("frontend/"):
+            continue
+        if f.startswith("frontend/src/routes/") and f.endswith(".tsx"):
+            name = f.rsplit("/", 1)[-1][: -len(".tsx")]
+            if name.startswith("_") or name == "__root":
+                out.add("ui:shared")  # layouts wrap every page
+            else:
+                out.add("ui:/" + ("" if name == "index" else name))
+        elif f.startswith("frontend/tests/"):
+            out.add("ui:tests")
+        else:
+            out.add("ui:shared")
+    return sorted(out)
+
+
 def build_bundle(
     *,
     mr_iid: int | None,
@@ -254,6 +273,7 @@ def build_bundle(
     areas = [f"route:{r}" for r in routes]
     if infra:
         areas += [f"infra:{c['resource']}" for c in infra.get("changes", [])]
+    areas += ui_areas(changed_files)
     if not areas:
         tops = sorted({f.split("/", 1)[0] for f in changed_files})
         areas = [f"files:{t}" for t in tops] or ["files:none"]
