@@ -36,6 +36,7 @@ Points add up. Each one appears as a line on the proof card.
 | Routes touched beyond 2 | +0.05 each |
 | Planning agent's prior (capped) | up to +0.30 |
 | **Trust ledger**: past misses in the areas this change touches (capped) | up to +0.60 |
+| **Infra agent** adjustment (infra changes the plan rules can't see: capacity, timeouts, probes, env/secret wiring, replacements) | 0 to +0.30 |
 | **Autonomy Router agent** adjustment | ≥ 0 only |
 
 **Blocked** (no promotion at any level): failing tests, or no test results.
