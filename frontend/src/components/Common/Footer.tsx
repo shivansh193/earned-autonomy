@@ -4,7 +4,7 @@ import { FaXTwitter } from "react-icons/fa6"
 const socialLinks = [
   {
     icon: FaGithub,
-    href: "https://github.com/fastapi/fastapi",
+    href: "https://github.com/fastapi/full-stack-fastapi-template",
     label: "GitHub",
   },
   { icon: FaXTwitter, href: "https://x.com/fastapi", label: "X" },
