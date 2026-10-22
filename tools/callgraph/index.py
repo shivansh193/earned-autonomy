@@ -496,6 +496,39 @@ class _CallVisitor(ast.NodeVisitor):
                 self._edge(dep[1])
         self.generic_visit(node)
 
+    # A function used as a value (passed to asyncio.to_thread, a callback, or kept in a
+    # module-level dispatch table the function reads) may be called later. Count it as a
+    # call: over-reporting reachability is the safe direction for security findings.
+    def visit_Name(self, node: ast.Name) -> None:
+        if isinstance(node.ctx, ast.Load):
+            self._reference(node)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if isinstance(node.ctx, ast.Load):
+            self._reference(node)
+        self.generic_visit(node)
+
+    def _reference(self, expr: ast.expr) -> None:
+        resolved = self.scope.resolve(expr)
+        if resolved and resolved[0] == "name":
+            target = self.index.canonical(resolved[1])
+            if target in self.index.functions:
+                self.func.calls.add(target)
+                return
+        if isinstance(expr, ast.Name) and expr.id not in self.scope.local_types:
+            mod = self.index.modules[self.func.module]
+            value = mod.assigns.get(expr.id)
+            if value is None or not isinstance(value, (ast.Dict, ast.List, ast.Tuple, ast.Set)):
+                return
+            table = Scope(self.index, mod, None, {})
+            for sub in ast.walk(value):
+                if isinstance(sub, (ast.Name, ast.Attribute)) and isinstance(sub.ctx, ast.Load):
+                    r = table.resolve(sub)
+                    if r and r[0] == "name":
+                        target = self.index.canonical(r[1])
+                        if target in self.index.functions or target in self.index.classes:
+                            self._edge(target)
+
 
 # ------------------------------------------------------------------------ routes
 def _const_str(index: Index, mod: Module, expr: ast.expr | None) -> str:
