@@ -141,6 +141,9 @@ def security_findings(
                 "paths": r.get("paths", [])[:3],
                 "possible_paths": r.get("possible_paths", [])[:3],
                 "runtime_hits": runtime,
+                "advisory": r.get("advisory"),
+                "version": r.get("version"),
+                "fix_versions": r.get("fix_versions") or [],
                 "new": None if known is None else (r.get("cve"), r.get("package")) not in known,
             }
         )
