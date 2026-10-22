@@ -2,7 +2,23 @@
 
 **Autonomy isn't a setting. It's earned, per change.** Every merge request gets evidence, a risk score and an autonomy level, and every autonomous decision ships with its proof.
 
-A [GitLab Transcend "Life After Code"](https://gitlab-transcend.devpost.com/) entry (Path B). It's built around the MIT-licensed [fastapi/full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template), whose backend API is the system under test.
+A [GitLab Transcend "Life After Code"](https://gitlab-transcend.devpost.com/) entry (Path B), applied to the MIT-licensed [fastapi/full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template) (46k GitHub stars): its FastAPI backend, React frontend and Terraform-managed Cloud Run infrastructure all go through the loop.
+
+## Judge TL;DR: verify it in 5 minutes
+
+| Claim | Where to see it |
+|---|---|
+| Trust is calibrated **per area** from what production did, and it moves both ways | [Trust ledger page](https://showcase-4900ab.gitlab.io/): `route:GET /api/v1/items/` +0.30 after a rollback, halved by the next clean release; Hands-off threshold widened 0.20 → 0.25 after five clean Hands-off releases |
+| A change shipped against the warning was **caught in prod and rolled back in 3.3 s** | MR [!8](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/8) → [monitor log](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/jobs/17364968751) → incident [#2](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/issues/2) opened by the Rollback agent |
+| The next clean change to that route was **held** because of that miss | MR [!9](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/9) proof card: Supervised, one reason, "past miss in `route:GET /api/v1/items/` +0.30" |
+| Agents only **raise** risk, with reasons a rule can't see | [!6](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/6) (Router +0.10), [!16](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/16) (Infra agent: timeout and probe cuts the plan rules saw as plain updates), [!22](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/22) (Router found three security flaws in the auto-merge code itself) |
+| Security findings are scored by **reachability**, not severity | [!12](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/12) (Triage agent opened the fix MR); on a second codebase, Jinja2's 3 advisories: 0 reachable |
+| Work is risk-scored **before code exists** | issue [#3](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/issues/3) (Planning agent's blast-radius estimate and `risk-prior::` label) |
+| The whole app is tested and deployed: **62 Playwright UI tests** and 58 backend tests on every MR, replay of 166 real requests, canary replay in prod | any MR pipeline, e.g. [!23](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/23) |
+| It's not tied to one app | VaultScope, an unrelated FastAPI app (350 tests): Hands-off, Supervised (planning prior applied) and **Blocked** (a failing test) verdicts, live |
+| Sustainability | each release's CI footprint (about 7 minutes, 0.6 g CO2e) and the carbon delta of every infra change, on the ledger page and proof cards; prod scales to zero |
+
+Live app: https://api-prod-gkozang2ta-uc.a.run.app (first request after idle takes ~25 s: scale to zero).
 
 ## The problem
 
@@ -47,20 +63,22 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 | Stage | What runs | Who decides |
 |---|---|---|
 | Plan | **Planning agent**: blast-radius estimate + bounded risk prior when an issue is created ✅ | Planning agent |
-| Create | MRs from people and agents; Triage flow opens fix MRs 🚧 | Triage agent |
-| Secure | dependency audit + **static reachability** of each vulnerable function ✅ | rules; Triage agent 🚧 |
+| Create | MRs from people, and fix MRs opened by the Triage agent ✅ | people; Triage agent |
+| Secure | dependency audit + **static reachability** of each vulnerable function; **Triage agent** verdict per advisory ✅ | rules; Triage agent |
 | Verify | 58 app tests + **replay of 166 recorded real requests** against a fresh database, with **runtime hit counts** ✅ | rules; Validation agent 🚧 |
 | Package | backend image → Artifact Registry ✅ | deterministic |
-| Configure | `terraform plan` on MRs touching `infra/` → risky changes, cost delta ✅ | rules; Infra agent 🚧 |
+| Configure | `terraform plan` on MRs touching `infra/` → risky changes, cost delta, attribute-level diff; **Infra agent** judges what the rules can't see ✅ | rules; Infra agent |
 | Release | bundle → risk → level → **proof card**; **Autonomy Router flow**; after merge, staging deploy and prod promotion **routed by level** (automatic / manual approval) ✅ | rule floor + Router agent |
-| Monitor | prod replay + health, rollback by traffic shift 🚧 | Rollback agent |
-| Govern | audit record per decision; **trust ledger + calibration** (logic ✅, CI recording 🚧) | deterministic |
+| Monitor | prod replay of the canary account against the new and previous revisions, **automatic rollback** by traffic shift, incident issue ✅ | rules; Rollback agent |
+| Govern | audit record per decision; **trust ledger in GCS + calibration**, recorded by the monitor after every release, published as a [public page](https://showcase-4900ab.gitlab.io/) ✅ | deterministic |
 
 ## See it run
 
 - **MR [!2](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/2)**: the pipeline in action. Secure, verify and release jobs ran green, then the Autonomy Router posted the proof card (risk 0.00, adjustment +0.00) and set `autonomy::hands-off`.
 - **MR [!1](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/1)**: the platform probe. What we verified about Duo flows before building on them ([docs/verification-notes.md](docs/verification-notes.md)).
 - The four demo scenarios and their status: [docs/demo-script.md](docs/demo-script.md).
+- **Trust ledger, live**: https://showcase-4900ab.gitlab.io/ (every release, its level and outcome, each area's penalty over time; regenerated after every release).
+- **On a second codebase**: the same pipeline and agents run on VaultScope, an unrelated FastAPI app (350 tests, 22 routes), in a private project in the same group. Results below.
 
 **Live (Google Cloud Run, scale to zero, so the first request after a quiet period takes ~25 s):**
 
@@ -77,12 +95,18 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 | Behaviour regression caught | pagination default 100 → 2: 8 body diffs, 0 status mismatches (tests alone would pass it) | local run, [risk-model.md §6](docs/risk-model.md) |
 | Static reachability on the real app | `jwt.decode` reachable from 18 of 23 routes via `Depends(get_current_user)` | `ea-callgraph` |
 | Runtime hits during one replay | `PyJWT.decode` 135, `verify_and_update` 10, `PasswordHash.hash` 8 | `runtime_hits` |
-| Scanner noise (scenario 2, local) | Jinja2 3.1.4: **3 advisories → 0 reachable** from any route | [demo-script.md](docs/demo-script.md) |
+| **Agent-opened security fix (live)** | certifi `PYSEC-2026-4320` → Triage verdict → fix MR !12 opened by the agent; its lock change is byte-identical to `uv lock --upgrade-package` | [demo-script.md §2](docs/demo-script.md) |
+| Scanner noise (local) | Jinja2 3.1.4: **3 advisories → 0 reachable** from any route (and the app's FastAPI won't even install that version) | [demo-script.md §2](docs/demo-script.md) |
+| **Planning estimate (live)** | issue #3 (optional `sort` parameter on the items list): the Planning agent read the route modules, posted its blast-radius estimate and set `risk-prior::0.00` + `planned` | issue #3 |
 | **Production rollback (live)** | MR !8 shipped against an Assisted warning; the prod monitor caught `GET /items/` returning 50 instead of 100 items (canary, prod data) and **rolled back in 3.3 s**; the Rollback agent opened incident #2 | [demo-script.md §4](docs/demo-script.md) |
 | **Trust lost and earned back (live)** | `route:GET /api/v1/items/` penalty +0.30 after the rollback, so the clean revert MR !9 was held at **Supervised** (risk 0.30); its clean release halved the penalty to 0.15 | GCS ledger, MR !9 proof card |
-| Releases through the loop (live) | Hands-off auto-promoted to prod: MRs !5, !7 · Supervised (Router raised +0.10): MR !6 · Assisted: MRs !4 (public infra), !8 | MR history |
+| **Autonomy earned (live)** | five clean Hands-off releases in a row (!11, !12, !14, !18, !19) widened the Hands-off threshold from **0.20 to 0.25**, with no human changing a setting | [ledger page](https://showcase-4900ab.gitlab.io/) |
+| **Infra agent (live)** | MR !16 cut the prod request timeout 120 s → 30 s and the startup probe 40 → 10 tries. The plan rules saw two plain updates (0.15, Hands-off). The Infra agent flagged both, plus that the apply would strip the monitor's rollback revision tags: **+0.20 → Supervised**. A first version double-counted with the Router (0.55); fixed so infra findings are counted once | MR !16 |
+| **Blocked (live, VaultScope !4)** | a "tidy-up" of CEF log escaping dropped the `=` escape (log injection in the SIEM export); 1 of 350 tests failed, the engine said **Blocked**, and the Router posted it on the failed pipeline | VaultScope !4 |
+| **Second codebase (live, VaultScope)** | Jinja2 3.1.4's 3 advisories: **0 of 3 reachable** from 22 routes (verified against the templates); a report CSV export came out Hands-off (0.00); report auth came out Supervised, the Router citing the token and HMAC lines | VaultScope !2, !3 |
+| Releases through the loop (live) | Hands-off auto-promoted to prod: MRs !5, !7, !11, !12, !14, !15, !17, !18, !19 · Supervised (Router raised +0.10): MR !6 · Assisted: MRs !4 (public infra), !8 | MR history |
 | Duo credits | about 0.6 per flow run | GitLab Credits dashboard |
-| Tool tests | 56 passing | `tools/tests` |
+| Tool tests | 63 passing | `tools/tests` |
 
 The headline numbers for the video get filled in from the full scenario runs, and only from them.
 
@@ -124,7 +148,7 @@ In GitLab, every MR runs the pipeline. With the `ea-autonomy-router` flow enable
 - The advisory → vulnerable-function map is curated by hand from fix commits; unmapped advisories are scored conservatively.
 - Replay compares against a recording; latency is only scored against a baseline run in the same environment.
 - GitLab Duo `HumanInputComponent` pauses but did not resume after approval in our tests, so human gates use GitLab MR approvals.
-- Not built yet: the Triage, Validation, Infra and Planning flows. The first ledger entry (MR !6) was recorded before the enforced-level fix and shows the rule level (hands_off) instead of the enforced Supervised; the ledger is append-only, so it stays as written.
+- Not built yet: the Validation agent. CI job tokens can't read an MR's linked issues, so on a private project the Router applies the Planning agent's prior instead of the release job (it is listed separately on the card). The first ledger entry (MR !6) was recorded before the enforced-level fix and shows the rule level (hands_off) instead of the enforced Supervised; the ledger is append-only, so it stays as written.
 
 ## License and attribution
 

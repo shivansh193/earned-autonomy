@@ -7,7 +7,9 @@ def test_decision_records_enforced_level_not_rule_level():
               "risk": {"final": 0.15, "rule_score": 0.15}, "autonomy": {"level": "hands_off", "thresholds": {}}}
     e = decision_from(bundle, "6", "supervised")
     assert e["level"] == "supervised" and e["rule_level"] == "hands_off" and e["areas"] == ["route:GET /x"]
-    assert decision_from(bundle, "6", "none")["level"] == "hands_off"  # unknown label: keep rule level
+    unlabelled = decision_from(bundle, "12", "none")
+    assert unlabelled["level"] == "supervised" and unlabelled["unreviewed"] is True  # manual gate, not earned
+    assert decision_from(bundle, "6", None)["level"] == "hands_off"  # no routing info at all
 
 
 def test_traffic_shapes():
