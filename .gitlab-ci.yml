@@ -127,7 +127,17 @@ frontend-check:
 frontend-e2e:
   stage: verify
   image: mcr.microsoft.com/playwright:v1.63.0-noble
-  extends: .postgres
+  services:
+    - name: postgres:18
+      alias: postgres
+    - name: axllent/mailpit
+      alias: mailpit
+  variables:
+    # Password-recovery tests read the email the backend sends (as in the template's compose).
+    SMTP_HOST: mailpit
+    SMTP_PORT: "1025"
+    SMTP_TLS: "false"
+    MAILPIT_HOST: http://mailpit:8025
   needs: [frontend-check]
   cache: []
   before_script: []
