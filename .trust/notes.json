@@ -1,0 +1,4 @@
+{
+  "6": "Recorded before the enforced-level fix: the Router raised this release to Supervised, but the entry shows the rule level. The ledger is append-only, so it stays as written.",
+  "12": "Agent-opened MR: GitLab starts no flow for bot pipelines, so no Router review and no label; promoted with a manual approval. Recorded before the fix that records such releases as Supervised (unreviewed)."
+}

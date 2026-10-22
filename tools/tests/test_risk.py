@@ -255,6 +255,21 @@ def test_preexisting_findings_listed_but_not_scored():
     assert decide(bundle(security=unknown), TH, {})["risk"]["final"] > 0.15  # no baseline: scored
 
 
+def test_ledger_report_replays_penalties_per_release():
+    from risk import ledger
+    from risk.report import releases, render
+
+    def dec(mr, level, areas):
+        return {"type": "decision", "id": f"d{mr}", "ts": "2026-10-22T00:00:00+00:00", "mr_iid": mr,
+                "areas": areas, "level": level, "final": 0.3, "rule_score": 0.3, "thresholds": {}}
+
+    entries = [dec(8, "assisted", ["route:GET /x"]), ledger.outcome_entry("d8", "rollback", seconds=3.3),
+               dec(9, "supervised", ["route:GET /x"]), ledger.outcome_entry("d9", "clean")]
+    rel = releases(entries)
+    assert [r["penalties"].get("route:GET /x") for r in rel] == [0.3, 0.15]
+    page = render(entries, notes={"9": "a <note>"})
+    assert "3.3 s" in page and "rollback" in page and "a &lt;note&gt;" in page
+    assert "<script src" not in page  # self-contained
 def test_module_level_hunks_scope_to_the_symbol_they_change(tmp_path):
     """One file holding every route (VaultScope's api/main.py): editing a request model or
     a dispatch table touches only the routes that use it; a middleware block touches all."""
