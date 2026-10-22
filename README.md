@@ -47,14 +47,14 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 | Stage | What runs | Who decides |
 |---|---|---|
 | Plan | **Planning agent**: blast-radius estimate + bounded risk prior when an issue is created ✅ | Planning agent |
-| Create | MRs from people and agents; Triage flow opens fix MRs 🚧 | Triage agent |
-| Secure | dependency audit + **static reachability** of each vulnerable function ✅ | rules; Triage agent 🚧 |
+| Create | MRs from people, and fix MRs opened by the Triage agent ✅ | people; Triage agent |
+| Secure | dependency audit + **static reachability** of each vulnerable function; **Triage agent** verdict per advisory ✅ | rules; Triage agent |
 | Verify | 58 app tests + **replay of 166 recorded real requests** against a fresh database, with **runtime hit counts** ✅ | rules; Validation agent 🚧 |
 | Package | backend image → Artifact Registry ✅ | deterministic |
 | Configure | `terraform plan` on MRs touching `infra/` → risky changes, cost delta ✅ | rules; Infra agent 🚧 |
 | Release | bundle → risk → level → **proof card**; **Autonomy Router flow**; after merge, staging deploy and prod promotion **routed by level** (automatic / manual approval) ✅ | rule floor + Router agent |
-| Monitor | prod replay + health, rollback by traffic shift 🚧 | Rollback agent |
-| Govern | audit record per decision; **trust ledger + calibration** (logic ✅, CI recording 🚧) | deterministic |
+| Monitor | prod replay of the canary account against the new and previous revisions, **automatic rollback** by traffic shift, incident issue ✅ | rules; Rollback agent |
+| Govern | audit record per decision; **trust ledger in GCS + calibration**, recorded by the monitor after every release ✅ | deterministic |
 
 ## See it run
 
@@ -77,7 +77,9 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 | Behaviour regression caught | pagination default 100 → 2: 8 body diffs, 0 status mismatches (tests alone would pass it) | local run, [risk-model.md §6](docs/risk-model.md) |
 | Static reachability on the real app | `jwt.decode` reachable from 18 of 23 routes via `Depends(get_current_user)` | `ea-callgraph` |
 | Runtime hits during one replay | `PyJWT.decode` 135, `verify_and_update` 10, `PasswordHash.hash` 8 | `runtime_hits` |
-| Scanner noise (scenario 2, local) | Jinja2 3.1.4: **3 advisories → 0 reachable** from any route | [demo-script.md](docs/demo-script.md) |
+| **Agent-opened security fix (live)** | certifi `PYSEC-2026-4320` → Triage verdict → fix MR !12 opened by the agent; its lock change is byte-identical to `uv lock --upgrade-package` | [demo-script.md §2](docs/demo-script.md) |
+| Scanner noise (local) | Jinja2 3.1.4: **3 advisories → 0 reachable** from any route (and the app's FastAPI won't even install that version) | [demo-script.md §2](docs/demo-script.md) |
+| **Planning estimate (live)** | issue #3 (optional `sort` parameter on the items list): the Planning agent read the route modules, posted its blast-radius estimate and set `risk-prior::0.00` + `planned` | issue #3 |
 | **Production rollback (live)** | MR !8 shipped against an Assisted warning; the prod monitor caught `GET /items/` returning 50 instead of 100 items (canary, prod data) and **rolled back in 3.3 s**; the Rollback agent opened incident #2 | [demo-script.md §4](docs/demo-script.md) |
 | **Trust lost and earned back (live)** | `route:GET /api/v1/items/` penalty +0.30 after the rollback, so the clean revert MR !9 was held at **Supervised** (risk 0.30); its clean release halved the penalty to 0.15 | GCS ledger, MR !9 proof card |
 | Releases through the loop (live) | Hands-off auto-promoted to prod: MRs !5, !7 · Supervised (Router raised +0.10): MR !6 · Assisted: MRs !4 (public infra), !8 | MR history |
@@ -124,7 +126,7 @@ In GitLab, every MR runs the pipeline. With the `ea-autonomy-router` flow enable
 - The advisory → vulnerable-function map is curated by hand from fix commits; unmapped advisories are scored conservatively.
 - Replay compares against a recording; latency is only scored against a baseline run in the same environment.
 - GitLab Duo `HumanInputComponent` pauses but did not resume after approval in our tests, so human gates use GitLab MR approvals.
-- Not built yet: the Triage, Validation, Infra and Planning flows. The first ledger entry (MR !6) was recorded before the enforced-level fix and shows the rule level (hands_off) instead of the enforced Supervised; the ledger is append-only, so it stays as written.
+- Not built yet: the Validation and Infra agents. The planning prior is applied by the release job but has not yet been exercised by an MR that closes a planned issue. The first ledger entry (MR !6) was recorded before the enforced-level fix and shows the rule level (hands_off) instead of the enforced Supervised; the ledger is append-only, so it stays as written.
 
 ## License and attribution
 

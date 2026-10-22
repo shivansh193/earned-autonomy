@@ -79,6 +79,13 @@ def decision_from(bundle: dict[str, Any] | None, mr: str | None, level: str | No
     if enforced in {"hands_off", "supervised", "assisted", "blocked"}:
         entry["rule_level"] = entry["level"]
         entry["level"] = enforced
+    elif level is not None:
+        # No Router label (e.g. an MR opened by an agent: GitLab doesn't start flows for
+        # bot-initiated pipelines). The promotion was gated by a manual approval, so it
+        # must not count as an earned hands-off release.
+        entry["rule_level"] = entry["level"]
+        entry["level"] = "supervised"
+        entry["unreviewed"] = True
     entry["commit"] = os.environ.get("CI_COMMIT_SHA", entry.get("commit"))
     entry["deployed_pipeline_id"] = os.environ.get("CI_PIPELINE_ID")
     return entry
