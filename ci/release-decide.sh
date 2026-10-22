@@ -22,11 +22,13 @@ fi
 # PLAN evidence: the Planning agent's risk prior on the issue(s) this MR closes
 # (scoped label risk-prior::<value>); the highest one applies, capped by the engine.
 if [ -n "${CI_MERGE_REQUEST_IID:-}" ]; then
-  PRIOR=$(curl -sf "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/closes_issues" |
+  # The job token makes this work on private projects too (anonymous access only sees public ones).
+  PRIOR=$(curl -sf --header "JOB-TOKEN: ${CI_JOB_TOKEN:-}"       "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/closes_issues" |
     python -c "import json,sys
 vals=[float(l.split('::',1)[1]) for i in json.load(sys.stdin) for l in i.get('labels',[]) if l.startswith('risk-prior::')]
 print(max(vals) if vals else '')" 2>/dev/null || true)
-  if [ -n "$PRIOR" ]; then echo "planning prior from closed issue(s): $PRIOR"; bundle_args+=(--planning-prior "$PRIOR"); fi
+  if [ -n "$PRIOR" ]; then echo "planning prior from closed issue(s): $PRIOR"; bundle_args+=(--planning-prior "$PRIOR")
+  else echo "planning prior: none found (no closed issue with a risk-prior:: label, or the lookup failed)"; fi
 fi
 [ -f reports/agent.json ] && agent=(--agent reports/agent.json) || agent=()
 

@@ -5,7 +5,8 @@
 # - See: https://docs.gitlab.com/ee/user/duo_agent_platform/security_threats/
 #
 # Autonomy Router (release stage), with the Infra agent (configure stage) in front of it.
-# Trigger: Pipeline events -> Passed, on merge request pipelines.
+# Trigger: Pipeline events -> Passed or Failed, on merge request pipelines (a failed pipeline
+# whose autonomy-decision job succeeded carries a Blocked verdict that must be posted).
 # 1. Infra agent: when the MR changes infrastructure, reads the terraform plan's attribute
 #    changes from the evidence bundle and judges blast radius, reversibility and risks the
 #    plan rules can't see (capacity, timeouts, probes, env/secret wiring, replacements).
@@ -78,8 +79,9 @@ prompts:
         {{goal}}
         ---
         Steps:
-        1. If object_attributes.status is not "success" or the payload has no merge_request,
-           answer {"infra": false, "adjustment": 0, "note": "skip"} with no tool calls.
+        1. If the payload has no merge_request, or object_attributes.status is neither
+           "success" nor "failed", answer {"infra": false, "adjustment": 0, "note": "skip"}
+           with no tool calls.
         2. In the payload's builds, find "autonomy-decision" and call gitlab_api_get with
            /api/v4/projects/{{project_id}}/jobs/<its id>/artifacts/reports/bundle.json
         3. If the call fails, or bundle.infra is missing or null, or bundle.infra.changes is empty,
@@ -131,8 +133,11 @@ prompts:
         {{goal}}
         ---
         Steps:
-        1. If the payload's object_attributes.status is not "success", or the payload has no
-           merge_request, reply with the single line `skip: <reason>` and make no tool calls.
+        1. If the payload has no merge_request, reply with the single line `skip: <reason>` and
+           make no tool calls. Continue if object_attributes.status is "success", or if it is
+           "failed" and the payload's builds contain "autonomy-decision" with status "success"
+           (failing tests or scans are evidence: the bundle then says blocked, and that verdict
+           must be posted). Otherwise reply `skip: <reason>` with no tool calls.
         2. In the payload's builds, find the build named "autonomy-decision" and take its id. Call
            gitlab_api_get with endpoint
            /api/v4/projects/{{project_id}}/jobs/<that id>/artifacts/reports/bundle.json
