@@ -314,12 +314,18 @@ pages:
   artifacts:
     paths: [public]
 
-# RELEASE, Hands-off: on a schedule (main only, where the protected EA_GITLAB_TOKEN
-# exists), merge the open MRs whose current proof card says hands_off and that change
+# RELEASE, Hands-off: on a schedule (main only; the merge token is fetched from Secret
+# Manager by an identity only main pipelines can assume), merge the open MRs whose current proof card says hands_off and that change
 # none of the system's own controls. See ci/hands_off_merge.py.
 hands-off-merge:
   stage: release
   image: python:3.14-slim
+  # The merge token comes from Secret Manager as ea-merger, which only main pipelines can assume.
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
+  variables:
+    EA_MERGER_SA: ea-merger@mercurial-lamp-512205-q5.iam.gserviceaccount.com
   cache: []
   before_script: []
   needs: []

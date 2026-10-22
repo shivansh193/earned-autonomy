@@ -1,8 +1,10 @@
 """Hands-off merges: the last human step, taken by the system when the change earned it.
 
-Runs on a schedule on main, the only place the protected EA_GITLAB_TOKEN exists (merge
-request pipelines, where agent-written code runs, never see it). An open MR is merged
-only when all of these hold:
+Runs on a schedule on main. The merge token never lives in GitLab: it sits in Google
+Secret Manager (ea-gitlab-token), readable only by the ea-merger service account, which
+only pipelines on main can assume (keyless OIDC federation, attribute.ref == main).
+Merge request pipelines, where agent-written code runs, can't read it. An open MR is
+merged only when all of these hold:
 
 - it is labelled autonomy::hands-off, is not a draft and GitLab says it is mergeable;
 - the pipeline of its current commit passed;
@@ -73,7 +75,31 @@ def why_not(pid: str, mr: dict) -> str | None:
     return None
 
 
+def token_from_secret_manager() -> str | None:
+    """The merge token, fetched keylessly as ea-merger (main pipelines only)."""
+    import base64
+    from pathlib import Path
+
+    if not (os.environ.get("GITLAB_OIDC_TOKEN") and os.environ.get("EA_MERGER_SA")):
+        return None
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    from risk.gcs import _req, access_token
+
+    os.environ["GCP_DEPLOYER_SA"] = os.environ["EA_MERGER_SA"]
+    url = (f"https://secretmanager.googleapis.com/v1/projects/{os.environ['GCP_PROJECT']}"
+           "/secrets/ea-gitlab-token/versions/latest:access")
+    status, raw, _ = _req(url, headers={"Authorization": f"Bearer {access_token()}"})
+    if status != 200:
+        print(f"merge token: Secret Manager answered {status}")
+        return None
+    return base64.b64decode(json.loads(raw)["payload"]["data"]).decode().strip()
+
+
 def main() -> int:
+    if not os.environ.get("EA_GITLAB_TOKEN"):
+        token = token_from_secret_manager()
+        if token:
+            os.environ["EA_GITLAB_TOKEN"] = token
     if not os.environ.get("EA_GITLAB_TOKEN"):
         print("EA_GITLAB_TOKEN is not set: nothing merges without a person")
         return 0
