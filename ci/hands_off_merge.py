@@ -18,14 +18,14 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
 CONTROLS = (".gitlab-ci.yml", "ci/", ".gitlab/", "tools/", ".trust/", "infra/")
-ROUTER_ACCOUNT = re.compile(r"^ai-ea-autonomy-router")
+# The Autonomy Router flow's own service account, matched exactly (not by prefix).
+ROUTER_ACCOUNT = os.environ.get("EA_ROUTER_ACCOUNT", "ai-ea-autonomy-router-gitlab-ai-hackathon")
 
 
 def api(method: str, path: str, body: dict | None = None) -> tuple[int, object]:
@@ -49,16 +49,25 @@ def why_not(pid: str, mr: dict) -> str | None:
     pipe = full.get("head_pipeline") or {}
     if pipe.get("status") != "success" or pipe.get("sha") != full.get("sha"):
         return "the current commit has no passed pipeline"
-    if full.get("detailed_merge_status") not in ("mergeable", "unchecked"):
+    if full.get("detailed_merge_status") != "mergeable":
+        # "unchecked" means GitLab hasn't re-evaluated yet; ask it to, and try next run.
+        api("GET", f"/projects/{pid}/merge_requests/{iid}?with_merge_status_recheck=true")
         return f"GitLab says {full.get('detailed_merge_status')}"
     _, notes = api("GET", f"/projects/{pid}/merge_requests/{iid}/notes?sort=desc&order_by=created_at&per_page=50")
     card = next((n for n in notes if "## Autonomy:" in n.get("body", "")), None)
-    if card is None or not ROUTER_ACCOUNT.match(card["author"]["username"]):
+    if card is None or card["author"]["username"] != ROUTER_ACCOUNT:
         return "no proof card from the Autonomy Router"
     if f"Pipeline {pipe.get('id')}" not in card["body"] or "**Final: hands_off**" not in card["body"]:
         return "the newest proof card is not a Hands-off verdict for the current pipeline"
-    _, diffs = api("GET", f"/projects/{pid}/merge_requests/{iid}/diffs?per_page=100")
-    touched = sorted({p for d in diffs for p in (d["old_path"], d["new_path"]) if p.startswith(CONTROLS)})
+    touched: set[str] = set()
+    for page in range(1, 51):  # every changed file, not just the first page
+        _, diffs = api("GET", f"/projects/{pid}/merge_requests/{iid}/diffs?per_page=100&page={page}")
+        touched |= {p for d in diffs for p in (d["old_path"], d["new_path"]) if p.startswith(CONTROLS)}
+        if len(diffs) < 100:
+            break
+    else:
+        return "too many changed files to check; a person merges this"
+    touched = sorted(touched)
     if touched:
         return "it changes the system's own controls (" + ", ".join(touched[:4]) + "); a person merges those"
     return None
