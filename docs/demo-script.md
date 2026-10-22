@@ -67,6 +67,31 @@ What ran live after that:
 5. **The next change was held.** The revert MR [!9](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/9) was perfectly clean (0 status mismatches, 0 body diffs), yet came out **Supervised, risk 0.30**. Its proof card shows exactly one reason: "Trust ledger: past miss in `route:GET /api/v1/items/` +0.30".
 6. **Trust earned back.** !9 was approved and promoted. The monitor compared it with the last *good* revision (`00004`), skipping the rolled-back `00005`, and found it clean. The penalty **halved to 0.15**.
 
+## 5. Infrastructure the rules can't read → the Infra agent ✅
+
+- **Change**: MR [!16](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/16) cut the prod request timeout 120 s → 30 s and the startup probe 40 → 10 tries (a "tidy-up").
+- **Rules**: two plain updates, 0.15 → Hands-off.
+- **Infra agent**: read the plan's attribute diff and flagged both cuts on production, plus something nobody had noticed: applying it would strip the `previous`/`candidate` revision tags the monitor uses for quick rollback. +0.20 → Supervised. (A first version double-counted with the Router; infra findings are now the Infra agent's alone.)
+
+## 6. Blocked → posted even though the pipeline failed ✅
+
+- VaultScope MR !4 "tidied" CEF log escaping and dropped the `=` escape (log injection in a SIEM export). 1 of 350 tests failed; the engine said **Blocked**; the Router, which now also runs on failed MR pipelines, posted the card and set `autonomy::blocked`.
+
+## 7. Zero clicks from MR to production ✅
+
+- MR [!31](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/31): opened 19:42 → Hands-off 19:47 → [merged by the scheduled job](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/jobs/17395211268) 19:54 → [prod promotion](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/pipelines/2978178092) 19:58 → [monitor clean](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/jobs/17395296068) 20:02.
+- The merge job only merges a current Hands-off verdict from the Router's own account, on a passed pipeline, for MRs that touch none of the controls. Reviewing that job ([!22](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/22)), the Router raised it to Supervised and found three flaws in it, fixed before merge.
+- Two failures on the way, both caught safely: the first release after the frontend landed failed at the image build (a missing workspace manifest; nothing deployed; fixed in !28, which also builds the image on MRs that change it), and one release was routed to a manual gate when a GitLab API read came back empty (the conservative default; fixed in !30 with retries).
+
+## 8. The whole template ✅
+
+- Frontend built into the deployed image; lint, type-check and the template's 62 Playwright tests on every MR. They caught a real bug: the build baked in `localhost:8000` from the dev `.env`, so the deployed app would have called each visitor's own machine.
+- The prod monitor checks the page, root element and JS bundle on both revisions; the first frontend release went from "no page" to "page, root, bundle".
+
+## 9. Sustainability ✅
+
+- Every infra change's always-on carbon delta on its proof card; every release's CI footprint (about 7 minutes and 0.6 g CO2e) on the [ledger page](https://showcase-4900ab.gitlab.io/); prod scales to zero.
+
 ## Reproduce
 
 Each scenario is an MR. Push a branch, open the MR, and the pipeline plus the Router do the rest. After merge, the promotion follows the `autonomy::` label. Scripts to recreate the scenario branches: 🚧.
