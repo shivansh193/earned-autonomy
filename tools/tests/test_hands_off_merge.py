@@ -1,0 +1,59 @@
+import importlib.util
+from pathlib import Path
+
+import pytest
+
+SPEC = importlib.util.spec_from_file_location(
+    "hands_off_merge", Path(__file__).resolve().parents[2] / "ci" / "hands_off_merge.py")
+hom = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(hom)
+
+CARD = "## Autonomy: Hands-off\n...\n- **Final: hands_off** at risk 0.00\n- Pipeline 77"
+
+
+def fake_api(mr=None, notes=None, diffs=None):
+    mr = {"sha": "abc", "detailed_merge_status": "mergeable", "head_pipeline": {"id": 77, "status": "success", "sha": "abc"},
+          **(mr or {})}
+    notes = notes if notes is not None else [{"body": CARD, "author": {"username": "ai-ea-autonomy-router-gitlab-ai-hackathon"}}]
+    diffs = diffs if diffs is not None else [{"old_path": "backend/app/api/routes/items.py", "new_path": "backend/app/api/routes/items.py"}]
+
+    def api(method, path, body=None):
+        if path.endswith("/notes?sort=desc&order_by=created_at&per_page=50"):
+            return 200, notes
+        if "/diffs" in path:
+            return 200, diffs
+        return 200, mr
+    return api
+
+
+@pytest.fixture
+def mr():
+    return {"iid": 5, "sha": "abc", "draft": False}
+
+
+def test_merges_an_app_change_with_a_current_hands_off_card(monkeypatch, mr):
+    monkeypatch.setattr(hom, "api", fake_api())
+    assert hom.why_not("1", mr) is None
+
+
+def test_never_merges_changes_to_its_own_controls(monkeypatch, mr):
+    monkeypatch.setattr(hom, "api", fake_api(diffs=[{"old_path": "ci/route.sh", "new_path": "ci/route.sh"}]))
+    assert "controls" in hom.why_not("1", mr)
+
+
+def test_card_must_be_for_the_current_pipeline_and_from_the_router(monkeypatch, mr):
+    stale = [{"body": CARD.replace("Pipeline 77", "Pipeline 76"), "author": {"username": "ai-ea-autonomy-router-x"}}]
+    monkeypatch.setattr(hom, "api", fake_api(notes=stale))
+    assert "current pipeline" in hom.why_not("1", mr)
+    forged = [{"body": CARD, "author": {"username": "someone"}}]
+    monkeypatch.setattr(hom, "api", fake_api(notes=forged))
+    assert "Autonomy Router" in hom.why_not("1", mr)
+
+
+def test_supervised_cards_and_failed_pipelines_wait(monkeypatch, mr):
+    sup = [{"body": CARD.replace("hands_off", "supervised"), "author": {"username": "ai-ea-autonomy-router-x"}}]
+    monkeypatch.setattr(hom, "api", fake_api(notes=sup))
+    assert hom.why_not("1", mr) is not None
+    monkeypatch.setattr(hom, "api", fake_api(mr={"head_pipeline": {"id": 77, "status": "failed", "sha": "abc"}}))
+    assert "passed pipeline" in hom.why_not("1", mr)
+    assert hom.why_not("1", {**mr, "draft": True}) == "draft"
