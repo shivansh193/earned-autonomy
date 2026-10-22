@@ -87,3 +87,18 @@ def test_no_op_and_data_sources_ignored():
              {"address": "data.google_project.p", "mode": "data", "type": "google_project", "change": {"actions": ["read"]}})
     out = analyse(p)
     assert out["changes"] == [] and out["summary"] == {"no-op": 1}
+
+
+def test_attribute_changes_list_what_changes_and_mask_sensitive():
+    before = run_service("api-prod")
+    after = run_service("api-prod")
+    after["template"][0]["scaling"][0]["max_instance_count"] = 1
+    after["template"][0]["containers"][0]["env"] = [{"name": "DB_PASSWORD", "value": "s3cret"}]
+    ch = rc("google_cloud_run_v2_service.api_prod", "google_cloud_run_v2_service", ["update"], before, after)
+    ch["change"]["after_sensitive"] = {"template": [{"containers": [{"env": [{"value": True}]}]}]}
+    out = analyse(plan(ch))
+    changed = out["attribute_changes"][0]["changed"]
+    assert changed["template[0].scaling[0].max_instance_count"] == [3, 1]
+    assert changed["template[0].containers[0].env[0].value"] == [None, "(sensitive)"]
+    assert "s3cret" not in str(out)
+    assert out["changes"][0]["risky"] is False  # the rules don't see a capacity cut; the Infra agent should
