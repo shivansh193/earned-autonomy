@@ -123,12 +123,15 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--notes", type=Path, help="JSON {mr_iid: note} shown beside a release")
     r.add_argument("--source", default="")
+    r.add_argument("--api", default=os.environ.get("CI_API_V4_URL"), help="GitLab API, for CI durations")
+    r.add_argument("--project", default=os.environ.get("CI_PROJECT_PATH"), help="project path, for CI durations")
     a = p.parse_args(argv)
     if a.cmd == "report":
         from datetime import UTC, datetime
 
         from risk.report import main_report
-        main_report(a.ledger, a.out, a.source, datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"), a.notes)
+        main_report(a.ledger, a.out, a.source, datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"), a.notes,
+                    api=a.api, project=a.project)
         sys.stdout.write(f"report: {a.out}\n")
         return 0
     token = access_token()

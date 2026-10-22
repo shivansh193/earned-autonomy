@@ -74,6 +74,10 @@ def _infra(i: dict[str, Any] | None, touched: bool) -> list[str]:
     lines = [f"- `{c.get('type')}` {c.get('resource')}" + (f" — **risky**: {c.get('reason')}" if c.get("risky") else "")
              for c in i.get("changes", [])]
     lines.append(f"- Estimated cost delta: ${i.get('cost_delta_usd_month', 0):.2f}/month")
+    kg = i.get("carbon_delta_kg_co2e_month")
+    if kg is not None:
+        lines.append(f"- Estimated carbon delta: {kg:+.2f} kg CO2e/month from always-on capacity"
+                     + (" (none: services scale to zero)" if kg == 0 else ""))
     return lines
 
 

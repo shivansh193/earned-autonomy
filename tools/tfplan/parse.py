@@ -12,7 +12,8 @@ create / update / delete / replace / read / no-op. A change is **risky** when:
 
 The cost delta covers what we can estimate honestly from a plan: always-on Cloud Run
 minimum instances (see ``PRICES``). It is an estimate. Request-driven usage is not in
-the plan, so it is excluded.
+the plan, so it is excluded. The carbon delta is the same always-on capacity turned into
+energy and emissions (see ``CARBON``), also an estimate.
 """
 
 from __future__ import annotations
@@ -40,6 +41,19 @@ BROAD_ROLES = {"roles/owner", "roles/editor", "roles/iam.securityAdmin", "roles/
 # A min instance is billed for every second of the month. Update alongside the region choice.
 PRICES = {"vcpu_second": 0.000018, "gib_second": 0.000002}
 SECONDS_PER_MONTH = 30 * 24 * 3600
+
+# Energy and emissions of always-on capacity, Cloud Carbon Footprint's method for GCP:
+# watts per vCPU at 50% average utilisation (min 0.71 W, max 4.26 W), 0.392 W per GiB of
+# memory, data-centre PUE 1.1. Grid intensity: location-based, us-central1 (Iowa).
+# VERIFY the grid figure against Google Cloud's published region carbon data before
+# quoting it; update it with the region choice.
+CARBON = {
+    "w_per_vcpu": 0.71 + 0.5 * (4.26 - 0.71),
+    "w_per_gib": 0.392,
+    "pue": 1.1,
+    "kg_co2e_per_kwh": 0.413,
+}
+HOURS_PER_MONTH = 30 * 24
 
 
 def _actions(change: dict[str, Any]) -> str:
@@ -90,6 +104,15 @@ def monthly_cost(profile: dict[str, Any] | None) -> float:
         return 0.0
     per_second = profile["cpu"] * PRICES["vcpu_second"] + profile["memory_gib"] * PRICES["gib_second"]
     return profile["min_instances"] * per_second * SECONDS_PER_MONTH
+
+
+def monthly_kg_co2e(profile: dict[str, Any] | None) -> float:
+    """Emissions of a service's always-on (min) instances over a month, in kg CO2e."""
+    if not profile:
+        return 0.0
+    watts = (profile["cpu"] * CARBON["w_per_vcpu"] + profile["memory_gib"] * CARBON["w_per_gib"]) * CARBON["pue"]
+    kwh = profile["min_instances"] * watts * HOURS_PER_MONTH / 1000
+    return kwh * CARBON["kg_co2e_per_kwh"]
 
 
 def _is_prod(rc: dict[str, Any], attrs: dict[str, Any] | None) -> bool:
@@ -183,10 +206,13 @@ def classify(rc: dict[str, Any]) -> dict[str, Any]:
 def analyse(plan: dict[str, Any]) -> dict[str, Any]:
     changes = [classify(rc) for rc in plan.get("resource_changes", []) if rc.get("mode", "managed") == "managed"]
     cost = 0.0
+    carbon = 0.0
     for rc in plan.get("resource_changes", []):
         if rc.get("type") == "google_cloud_run_v2_service":
             ch = rc.get("change", {})
-            cost += monthly_cost(cloud_run_profile(ch.get("after"))) - monthly_cost(cloud_run_profile(ch.get("before")))
+            before, after = cloud_run_profile(ch.get("before")), cloud_run_profile(ch.get("after"))
+            cost += monthly_cost(after) - monthly_cost(before)
+            carbon += monthly_kg_co2e(after) - monthly_kg_co2e(before)
     summary: dict[str, int] = {}
     for c in changes:
         summary[c["type"]] = summary.get(c["type"], 0) + 1
@@ -202,4 +228,6 @@ def analyse(plan: dict[str, Any]) -> dict[str, Any]:
         "summary": summary,
         "cost_delta_usd_month": round(cost, 2),
         "cost_basis": "always-on Cloud Run min instances at PRICES in tools/tfplan/parse.py; estimate",
+        "carbon_delta_kg_co2e_month": round(carbon, 3),
+        "carbon_basis": "always-on Cloud Run min instances, CARBON in tools/tfplan/parse.py (CCF method); estimate",
     }
