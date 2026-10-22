@@ -2,7 +2,23 @@
 
 **Autonomy isn't a setting. It's earned, per change.** Every merge request gets evidence, a risk score and an autonomy level, and every autonomous decision ships with its proof.
 
-A [GitLab Transcend "Life After Code"](https://gitlab-transcend.devpost.com/) entry (Path B). It's built around the MIT-licensed [fastapi/full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template), whose backend API is the system under test.
+A [GitLab Transcend "Life After Code"](https://gitlab-transcend.devpost.com/) entry (Path B), applied to the MIT-licensed [fastapi/full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template) (46k GitHub stars): its FastAPI backend, React frontend and Terraform-managed Cloud Run infrastructure all go through the loop.
+
+## Judge TL;DR: verify it in 5 minutes
+
+| Claim | Where to see it |
+|---|---|
+| Trust is calibrated **per area** from what production did, and it moves both ways | [Trust ledger page](https://showcase-4900ab.gitlab.io/): `route:GET /api/v1/items/` +0.30 after a rollback, halved by the next clean release; Hands-off threshold widened 0.20 → 0.25 after five clean Hands-off releases |
+| A change shipped against the warning was **caught in prod and rolled back in 3.3 s** | MR [!8](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/8) → [monitor log](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/jobs/17364968751) → incident [#2](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/issues/2) opened by the Rollback agent |
+| The next clean change to that route was **held** because of that miss | MR [!9](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/9) proof card: Supervised, one reason, "past miss in `route:GET /api/v1/items/` +0.30" |
+| Agents only **raise** risk, with reasons a rule can't see | [!6](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/6) (Router +0.10), [!16](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/16) (Infra agent: timeout and probe cuts the plan rules saw as plain updates), [!22](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/22) (Router found three security flaws in the auto-merge code itself) |
+| Security findings are scored by **reachability**, not severity | [!12](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/12) (Triage agent opened the fix MR); on a second codebase, Jinja2's 3 advisories: 0 reachable |
+| Work is risk-scored **before code exists** | issue [#3](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/issues/3) (Planning agent's blast-radius estimate and `risk-prior::` label) |
+| The whole app is tested and deployed: **62 Playwright UI tests** and 58 backend tests on every MR, replay of 166 real requests, canary replay in prod | any MR pipeline, e.g. [!23](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/23) |
+| It's not tied to one app | VaultScope, an unrelated FastAPI app (350 tests): Hands-off, Supervised (planning prior applied) and **Blocked** (a failing test) verdicts, live |
+| Sustainability | each release's CI footprint (about 7 minutes, 0.6 g CO2e) and the carbon delta of every infra change, on the ledger page and proof cards; prod scales to zero |
+
+Live app: https://api-prod-gkozang2ta-uc.a.run.app (first request after idle takes ~25 s: scale to zero).
 
 ## The problem
 
