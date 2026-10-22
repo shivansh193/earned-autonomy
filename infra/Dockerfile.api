@@ -1,5 +1,16 @@
-# Backend API image for Cloud Run (the upstream backend/Dockerfile also builds the
-# React frontend, which this project doesn't deploy). Build context: repo root.
+# App image for Cloud Run: the FastAPI backend serving the built React frontend from the
+# same origin, so every deploy, prod monitor and rollback covers the UI too.
+# Build context: repo root.
+FROM oven/bun:1.3 AS frontend-build
+WORKDIR /app
+COPY package.json bun.lock ./
+COPY frontend/package.json frontend/
+RUN bun install --frozen-lockfile
+COPY frontend frontend
+# Same origin as the API: no VITE_API_URL. vite writes to ../backend/app/frontend.
+# frontend/.env points at localhost:8000 for local dev; production calls its own origin.
+RUN mkdir -p backend/app && cd frontend && VITE_API_URL= bun run build
+
 FROM python:3.14-slim
 
 ENV PYTHONUNBUFFERED=1 UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH"
@@ -14,8 +25,8 @@ COPY backend/app backend/app
 COPY backend/scripts backend/scripts
 COPY tools tools
 RUN uv sync --frozen --no-dev --package app \
- && uv pip install --no-deps -e tools \
- && mkdir -p backend/app/frontend
+ && uv pip install --no-deps -e tools
+COPY --from=frontend-build /app/backend/app/frontend backend/app/frontend
 
 WORKDIR /app/backend
 # Migrate, ensure the first superuser, then serve. Cloud Run sets PORT.

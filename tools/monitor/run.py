@@ -52,6 +52,31 @@ def mr_bundle(mr: str | None) -> dict[str, Any] | None:
     return None
 
 
+def ui_check(base: str) -> dict[str, Any]:
+    """Does this revision serve the frontend: the page, its root element and the JS bundle?"""
+    import re
+    import urllib.request
+
+    out: dict[str, Any] = {"page": None, "root": False, "bundle": None}
+    try:
+        with urllib.request.urlopen(base.rstrip("/") + "/", timeout=120) as r:
+            out["page"] = r.status
+            html = r.read().decode("utf-8", "replace")
+        out["root"] = 'id="root"' in html
+        src = re.search(r'<script[^>]+src="([^"]+\.js)"', html)
+        if src:
+            with urllib.request.urlopen(base.rstrip("/") + "/" + src.group(1).lstrip("/"), timeout=60) as r:
+                out["bundle"] = r.status
+    except Exception as e:  # a revision that can't serve the page counts as not serving it
+        out["error"] = str(e)[:120]
+    return out
+
+
+def ui_regression(previous: dict[str, Any], candidate: dict[str, Any]) -> bool:
+    """The candidate lost something the previous revision served."""
+    return any(previous.get(k) == v and candidate.get(k) != v for k, v in (("page", 200), ("root", True), ("bundle", 200)))
+
+
 def rolled_back_revisions(bucket: str, token: str) -> set[str]:
     data, _ = gcs.download(bucket, "trust/ledger.jsonl", token)
     bad = set()
@@ -117,7 +142,10 @@ def main(argv: list[str] | None = None) -> int:
         report = compare(exchanges, cand, base)
         result["replay"] = {k: report[k] for k in ("requests", "endpoints", "status_mismatches", "body_diffs",
                                                    "errors", "status_mismatch_details", "body_diff_details")}
-        regression = bool(report["status_mismatches"] or report["body_diffs"] or report["errors"])
+        ui = {"previous": ui_check(urls["previous"]), "candidate": ui_check(urls["candidate"])}
+        result["ui"] = ui
+        regression = bool(report["status_mismatches"] or report["body_diffs"] or report["errors"]
+                          or ui_regression(ui["previous"], ui["candidate"]))
         rolled_back = False
         if regression:
             t0 = time.time()

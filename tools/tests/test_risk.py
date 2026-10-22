@@ -304,3 +304,20 @@ def test_module_level_hunks_scope_to_the_symbol_they_change(tmp_path):
     (pkg / "main.py").write_text(src.replace("    return []\n", "    import os\n    return os.environ.get('X')\n"))
     idx = build_index(tmp_path, ["one"])
     assert routes_touched(idx, [], tmp_path, diff={rel: [(6, 6)]}) == ["POST /report"]
+
+
+def test_frontend_files_map_to_ui_areas():
+    from risk.bundle import ui_areas
+    assert ui_areas(["frontend/src/routes/_layout/items.tsx", "frontend/src/routes/login.tsx",
+                     "frontend/src/routes/_layout/index.tsx"]) == ["ui:/", "ui:/items", "ui:/login"]
+    assert ui_areas(["frontend/src/components/Items/AddItem.tsx", "frontend/src/routes/_layout.tsx"]) == ["ui:shared"]
+    assert ui_areas(["backend/app/main.py"]) == []
+
+
+def test_several_junit_reports_are_summed(tmp_path):
+    from risk.cli import _tests
+    a, b = tmp_path / "a.xml", tmp_path / "b.xml"
+    a.write_text('<testsuite tests="10" failures="1" errors="0" skipped="2"/>')
+    b.write_text('<testsuites><testsuite tests="7" failures="0" errors="0" skipped="0"/></testsuites>')
+    assert _tests([a, b, tmp_path / "missing.xml"]) == {"passed": 14, "failed": 1, "skipped": 2}
+    assert _tests([tmp_path / "missing.xml"]) is None

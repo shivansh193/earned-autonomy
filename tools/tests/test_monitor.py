@@ -19,3 +19,13 @@ def test_traffic_shapes():
     rb = pinned_to(prev, cand)
     assert rb[0]["revision"] == "api-00001" and rb[0]["percent"] == 100 and sum(x["percent"] for x in rb) == 100
     assert tag_urls({"trafficStatuses": [{"tag": "previous", "uri": "https://previous---s"}, {"percent": 100}]}) == {"previous": "https://previous---s"}
+
+
+def test_ui_regression_only_counts_what_the_previous_revision_served():
+    from monitor.run import ui_regression
+    ok = {"page": 200, "root": True, "bundle": 200}
+    assert not ui_regression(ok, dict(ok))
+    assert ui_regression(ok, {"page": 200, "root": True, "bundle": 404})
+    assert ui_regression(ok, {"page": 500, "root": False, "bundle": None})
+    # before the frontend shipped, a page appearing is not a regression
+    assert not ui_regression({"page": 404, "root": False, "bundle": None}, ok)

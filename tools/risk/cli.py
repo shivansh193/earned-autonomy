@@ -57,7 +57,7 @@ def cmd_bundle(a: argparse.Namespace) -> int:
         pipeline_id=a.pipeline_id or _int_env("CI_PIPELINE_ID"),
         changed_files=changed,
         routes=routes,
-        tests=junit_summary(a.junit) if a.junit and a.junit.exists() else None,
+        tests=_tests(a.junit),
         security=security_findings(load_json(a.reachability), load_json(a.hits), load_json(a.baseline_reachability)),
         replay=replay_summary(load_json(a.replay), load_json(a.verdicts)),
         infra=load_json(a.infra),
@@ -65,6 +65,14 @@ def cmd_bundle(a: argparse.Namespace) -> int:
     )
     _write(a.out, bundle)
     return 0
+
+
+def _tests(paths: list[Path] | None) -> dict[str, int] | None:
+    """Sum the JUnit reports that exist; None (missing evidence) when none does."""
+    found = [junit_summary(p) for p in paths or [] if p.exists()]
+    if not found:
+        return None
+    return {k: sum(f[k] for f in found) for k in ("passed", "failed", "skipped")}
 
 
 def _int_env(name: str) -> int | None:
@@ -122,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--app-root", type=Path)
     b.add_argument("--app-package", action="append")
     b.add_argument("--define", action="append", default=[])
-    b.add_argument("--junit", type=Path)
+    b.add_argument("--junit", type=Path, action="append", help="JUnit XML; repeat for several suites")
     b.add_argument("--reachability", type=Path)
     b.add_argument("--hits", type=Path)
     b.add_argument("--replay", type=Path)

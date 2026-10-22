@@ -4,7 +4,7 @@
 set -euo pipefail
 
 bundle_args=(--out reports/bundle.json --app-root backend --app-package app
-             --junit reports/junit.xml --reachability reports/reach.json
+             --junit reports/junit.xml --junit reports/junit-frontend.xml --reachability reports/reach.json
              --hits reports/hits.json --replay reports/replay.json)
 if [ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]; then
   git diff -U0 "$CI_MERGE_REQUEST_DIFF_BASE_SHA" HEAD > reports/change.diff
