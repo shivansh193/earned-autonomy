@@ -19,6 +19,15 @@ if [ -f reports/plan.json ]; then
   ea-tfplan reports/plan.json > reports/infra.json
   bundle_args+=(--infra reports/infra.json)
 fi
+# PLAN evidence: the Planning agent's risk prior on the issue(s) this MR closes
+# (scoped label risk-prior::<value>); the highest one applies, capped by the engine.
+if [ -n "${CI_MERGE_REQUEST_IID:-}" ]; then
+  PRIOR=$(curl -sf "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/closes_issues" |
+    python -c "import json,sys
+vals=[float(l.split('::',1)[1]) for i in json.load(sys.stdin) for l in i.get('labels',[]) if l.startswith('risk-prior::')]
+print(max(vals) if vals else '')" 2>/dev/null || true)
+  if [ -n "$PRIOR" ]; then echo "planning prior from closed issue(s): $PRIOR"; bundle_args+=(--planning-prior "$PRIOR"); fi
+fi
 [ -f reports/agent.json ] && agent=(--agent reports/agent.json) || agent=()
 
 # GOVERN: decisions use the shared trust ledger (outcomes of past releases) from GCS.
