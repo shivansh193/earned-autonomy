@@ -119,7 +119,7 @@ frontend-check:
   before_script: []
   script:
     - bun install --frozen-lockfile
-    - cd frontend && bunx biome lint --no-errors-on-unmatched --files-ignore-unknown=true ./ && bun run build
+    - cd frontend && bunx biome lint --no-errors-on-unmatched --files-ignore-unknown=true ./ && VITE_API_URL= bun run build  # same origin: override the dev .env (localhost:8000)
   artifacts:
     paths: [backend/app/frontend/]
     expire_in: 7 days

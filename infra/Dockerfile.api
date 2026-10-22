@@ -8,7 +8,8 @@ COPY frontend/package.json frontend/
 RUN bun install --frozen-lockfile
 COPY frontend frontend
 # Same origin as the API: no VITE_API_URL. vite writes to ../backend/app/frontend.
-RUN mkdir -p backend/app && cd frontend && bun run build
+# frontend/.env points at localhost:8000 for local dev; production calls its own origin.
+RUN mkdir -p backend/app && cd frontend && VITE_API_URL= bun run build
 
 FROM python:3.14-slim
 
