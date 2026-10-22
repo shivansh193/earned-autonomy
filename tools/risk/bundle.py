@@ -6,6 +6,7 @@ and the risk engine treats missing evidence conservatively (see engine.py).
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import xml.etree.ElementTree as ET
@@ -51,26 +52,77 @@ def parse_diff(diff_text: str) -> dict[str, list[tuple[int, int]]]:
     return out
 
 
-def changed_functions(index: Index, diff: dict[str, list[tuple[int, int]]], repo_root: Path) -> tuple[set[str], set[Path]]:
-    """Functions whose source lines a diff touches, plus files where a hunk hit
-    module-level code (those fall back to file-level scope)."""
+def _top_level_symbols(stmt: ast.stmt) -> list[str] | None:
+    """Names a module-level statement defines, [] for statements that don't change
+    behaviour on their own (docstrings, imports), None when the effect is file-wide."""
+    if isinstance(stmt, ast.ClassDef):
+        return [stmt.name]
+    if isinstance(stmt, (ast.Assign, ast.AnnAssign)):
+        targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+        names = [t.id for t in targets if isinstance(t, ast.Name)]
+        return names if len(names) == len(targets) else None
+    if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+        return []
+    if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
+        return []
+    return None
+
+
+def changed_functions(
+    index: Index, diff: dict[str, list[tuple[int, int]]], repo_root: Path
+) -> tuple[set[str], set[Path], set[str]]:
+    """Functions whose source lines a diff touches; files where a hunk hit module-level
+    code with a file-wide effect (those fall back to file-level scope); and module-level
+    symbols (classes, variables) a hunk changed, as "module.name"."""
     by_file: dict[Path, list[tuple[int, int, str]]] = {}
     for q, f in index.functions.items():
         node = f.node
         first = min([node.lineno, *(d.lineno for d in getattr(node, "decorator_list", []))])
         by_file.setdefault(index.modules[f.module].path.resolve(), []).append((first, node.end_lineno or first, q))
+    mod_by_path = {m.path.resolve(): m for m in index.modules.values()}
     funcs: set[str] = set()
     whole: set[Path] = set()
+    symbols: set[str] = set()
     for rel, hunks in diff.items():
         p = (repo_root / rel).resolve()
         spans = by_file.get(p, [])
+        mod = mod_by_path.get(p)
         for a, b in hunks:
             inside = [q for lo, hi, q in spans if lo <= b and a <= hi]
             if inside:
                 funcs.update(inside)
-            elif spans:
-                whole.add(p)
-    return funcs, whole
+                continue
+            if mod is None:
+                if spans:
+                    whole.add(p)
+                continue
+            hit = [st for st in mod.tree.body
+                   if st.lineno <= b and a <= (st.end_lineno or st.lineno)
+                   and not isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef))]
+            for st in hit:
+                names = _top_level_symbols(st)
+                if names is None:
+                    whole.add(p)
+                else:
+                    symbols.update(f"{mod.name}.{n}" for n in names)
+    return funcs, whole, symbols
+
+
+def _references(index: Index, qualname: str, symbols: set[str]) -> bool:
+    """Whether a function's source names one of the changed module-level symbols,
+    directly (same module) or through an import alias."""
+    fn = index.functions.get(qualname)
+    if fn is None or not symbols:
+        return False
+    mod = index.modules[fn.module]
+    names = {n.id for n in ast.walk(fn.node) if isinstance(n, ast.Name)}
+    for sym in symbols:
+        sym_mod, _, short = sym.rpartition(".")
+        if sym_mod == fn.module and short in names:
+            return True
+        if any(alias in names and target == sym for alias, target in mod.imports.items()):
+            return True
+    return False
 
 
 def routes_touched(
@@ -86,10 +138,10 @@ def routes_touched(
     """
     func_file = {q: index.modules[f.module].path.resolve() for q, f in index.functions.items()}
     if diff is not None:
-        funcs, whole_files = changed_functions(index, diff, repo_root)
+        funcs, whole_files, symbols = changed_functions(index, diff, repo_root)
 
         def is_changed(q: str) -> bool:
-            return q in funcs or func_file.get(q) in whole_files
+            return q in funcs or func_file.get(q) in whole_files or _references(index, q, symbols)
     else:
         files = {(repo_root / f).resolve() for f in changed_files}
 
