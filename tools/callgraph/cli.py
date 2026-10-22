@@ -94,7 +94,8 @@ def main(argv: list[str] | None = None) -> int:
                 out.append({**f, "reachable": None, "reason": "no known vulnerable function"})
                 continue
             res = reachability(index, f["function"], cve=f.get("cve"), package=f.get("package"))
-            out.append({**res, "severity": f.get("severity")})
+            out.append({**res, "severity": f.get("severity"),
+                        **{k: f.get(k) for k in ("advisory", "version", "fix_versions")}})
     json.dump(out, sys.stdout, indent=2)
     sys.stdout.write("\n")
     return 0

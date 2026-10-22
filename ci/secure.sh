@@ -17,6 +17,9 @@ ea-callgraph batch --app-root backend --app-package app \
   --site-packages .venv/lib/python3.14/site-packages \
   --findings reports/head-findings.json > reports/reach.json
 
+# Precompute verified fix edits (uv lock --upgrade-package) for the Triage agent.
+python -m callgraph.fixes --findings reports/head-findings.json --out reports/fixes.json || echo '[]' > reports/fixes.json
+
 if [ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]; then
   git worktree add -q /tmp/base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
   audit /tmp/base base
