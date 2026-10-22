@@ -106,6 +106,44 @@ def _iam_members(attrs: dict[str, Any] | None) -> set[str]:
     return members
 
 
+MAX_KEYS = 40  # per resource, to keep the evidence bundle small enough for an agent to read
+
+
+def _flatten(value: Any, sens: Any, unknown: Any, prefix: str, out: dict[str, Any]) -> None:
+    """Flatten nested plan values to dotted paths, masking sensitive and computed values."""
+    if sens is True:
+        out[prefix] = "(sensitive)"
+    elif unknown is True:
+        out[prefix] = "(known after apply)"
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            _flatten(v, (sens or {}).get(k) if isinstance(sens, dict) else None,
+                     (unknown or {}).get(k) if isinstance(unknown, dict) else None,
+                     f"{prefix}.{k}" if prefix else k, out)
+    elif isinstance(value, list) and value and all(isinstance(v, dict) for v in value):
+        for i, v in enumerate(value):
+            _flatten(v, sens[i] if isinstance(sens, list) and i < len(sens) else None,
+                     unknown[i] if isinstance(unknown, list) and i < len(unknown) else None, f"{prefix}[{i}]", out)
+    else:
+        out[prefix] = value
+
+
+def attribute_diff(rc: dict[str, Any]) -> dict[str, list[Any]]:
+    """{path: [before, after]} for every attribute the change modifies (values shortened)."""
+    ch = rc.get("change", {})
+    before: dict[str, Any] = {}
+    after: dict[str, Any] = {}
+    _flatten(ch.get("before") or {}, ch.get("before_sensitive"), None, "", before)
+    _flatten(ch.get("after") or {}, ch.get("after_sensitive"), ch.get("after_unknown"), "", after)
+
+    def short(v: Any) -> Any:
+        return v[:120] + "..." if isinstance(v, str) and len(v) > 120 else v
+
+    diff = {k: [short(before.get(k)), short(after.get(k))] for k in sorted(set(before) | set(after))
+            if before.get(k) != after.get(k) and after.get(k) != "(known after apply)"}
+    return dict(list(diff.items())[:MAX_KEYS])
+
+
 def classify(rc: dict[str, Any]) -> dict[str, Any]:
     change = rc.get("change", {})
     kind = _actions(change)
@@ -155,6 +193,12 @@ def analyse(plan: dict[str, Any]) -> dict[str, Any]:
     return {
         "terraform_version": plan.get("terraform_version"),
         "changes": [c for c in changes if c["type"] != "no-op"],
+        # What exactly changes, for the Infra agent (rules above only know fixed patterns).
+        "attribute_changes": [
+            {"resource": rc.get("address"), "type": _actions(rc.get("change", {})), "changed": attribute_diff(rc)}
+            for rc in plan.get("resource_changes", [])
+            if rc.get("mode", "managed") == "managed" and _actions(rc.get("change", {})) != "no-op"
+        ],
         "summary": summary,
         "cost_delta_usd_month": round(cost, 2),
         "cost_basis": "always-on Cloud Run min instances at PRICES in tools/tfplan/parse.py; estimate",
