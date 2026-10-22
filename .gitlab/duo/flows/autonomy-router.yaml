@@ -145,9 +145,14 @@ prompts:
            pipeline <pipeline id>; defaulting to Assisted." and use level assisted with
            adjustment 0.00, then go to step 6.
         3. Call list_merge_request_diffs for the merge request (merge_request.iid in the payload).
+           Planning prior: if the bundle's planning_prior is null (CI can't read issues on a
+           private project), call gitlab_api_get with
+           /api/v4/projects/{{project_id}}/merge_requests/<iid>/closes_issues and let P be the
+           highest value of a label "risk-prior::<x>" on those issues, capped at 0.30 (0 if none).
+           If the bundle's planning_prior is set, P = 0 (the rule engine already counted it).
         4. Decide your own adjustment A1 per the hard rules. Let I = the Infra agent's adjustment
            (0 if its review is missing, not JSON, negative or above 0.30), A = min(0.50, A1 + I),
-           R = risk.final from the bundle, N = min(1.00, R + A), H = autonomy.thresholds.hands_off_max,
+           R = risk.final from the bundle, N = min(1.00, R + P + A), H = autonomy.thresholds.hands_off_max,
            S = autonomy.thresholds.supervised_max. If autonomy.level is "blocked" the level is
            blocked. Otherwise the level is hands_off if N <= H, supervised if N <= S, else
            assisted. Never choose a level below autonomy.level.
@@ -161,6 +166,7 @@ prompts:
            (always:)
            ### Autonomy Router review
            - Rule engine: <autonomy.level> at risk <R>
+           - (only if P > 0:) Planning prior from issue #<n>: +<P> (applied here because CI could not read the issue)
            - Router adjustment: +<A1> — <reason, or "no risk the rules can't see">
            - Infra agent adjustment: +<I>
            - **Final: <level>** at risk <N>
@@ -169,7 +175,7 @@ prompts:
            where <level> is hands-off, supervised, assisted or blocked, and remove_labels set to
            the other three autonomy:: labels.
         7. Final answer: one line of JSON with keys pipeline, mr, rule_level, rule_risk,
-           adjustment, infra_adjustment, reason, level, risk.
+           adjustment, infra_adjustment, planning_prior, reason, level, risk.
     params:
       timeout: 240
 
