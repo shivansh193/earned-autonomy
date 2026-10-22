@@ -37,7 +37,7 @@ MR / pipeline events
           Autonomy Router agent (Duo flow, pipeline passed): reviews diff, may only RAISE risk,
           posts the card, sets autonomy::<level>
                  ▼
- deploy/monitor (🚧): promote by level, prod replay, rollback ─► trust ledger ─► calibration
+ deploy/monitor: promote by level, prod replay, rollback ─► trust ledger ─► calibration
 ```
 
 ## Stages
@@ -78,9 +78,11 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 | Static reachability on the real app | `jwt.decode` reachable from 18 of 23 routes via `Depends(get_current_user)` | `ea-callgraph` |
 | Runtime hits during one replay | `PyJWT.decode` 135, `verify_and_update` 10, `PasswordHash.hash` 8 | `runtime_hits` |
 | Scanner noise (scenario 2, local) | Jinja2 3.1.4: **3 advisories → 0 reachable** from any route | [demo-script.md](docs/demo-script.md) |
-| Trust calibration | after one hands-off rollback on `/items`: `hands_off_max` 0.20 → 0.15, next `/items` change → Supervised | `tools/risk/ledger.py`, tests |
+| **Production rollback (live)** | MR !8 shipped against an Assisted warning; the prod monitor caught `GET /items/` returning 50 instead of 100 items (canary, prod data) and **rolled back in 3.3 s**; the Rollback agent opened incident #2 | [demo-script.md §4](docs/demo-script.md) |
+| **Trust lost and earned back (live)** | `route:GET /api/v1/items/` penalty +0.30 after the rollback, so the clean revert MR !9 was held at **Supervised** (risk 0.30); its clean release halved the penalty to 0.15 | GCS ledger, MR !9 proof card |
+| Releases through the loop (live) | Hands-off auto-promoted to prod: MRs !5, !7 · Supervised (Router raised +0.10): MR !6 · Assisted: MRs !4 (public infra), !8 | MR history |
 | Duo credits | about 0.6 per flow run | GitLab Credits dashboard |
-| Tool tests | 54 passing | `tools/tests` |
+| Tool tests | 56 passing | `tools/tests` |
 
 The headline numbers for the video get filled in from the full scenario runs, and only from them.
 
@@ -122,7 +124,7 @@ In GitLab, every MR runs the pipeline. With the `ea-autonomy-router` flow enable
 - The advisory → vulnerable-function map is curated by hand from fix commits; unmapped advisories are scored conservatively.
 - Replay compares against a recording; latency is only scored against a baseline run in the same environment.
 - GitLab Duo `HumanInputComponent` pauses but did not resume after approval in our tests, so human gates use GitLab MR approvals.
-- Not built yet: monitor and rollback, the Triage, Validation, Infra and Planning flows, and ledger recording from CI.
+- Not built yet: the Triage, Validation, Infra and Planning flows. The first ledger entry (MR !6) was recorded before the enforced-level fix and shows the rule level (hands_off) instead of the enforced Supervised; the ledger is append-only, so it stays as written.
 
 ## License and attribution
 
