@@ -8,11 +8,18 @@
 set -eu
 apk add -q --no-cache curl jq >/dev/null 2>&1 || true
 mkdir -p reports
-LEVEL=$(curl -sf "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/commits/${CI_COMMIT_SHA}/merge_requests" |
-  jq -r '[.[] | select(.state == "merged") | .labels[] | select(startswith("autonomy::"))] | first // "none"' |
+# One read of the commit's MRs, retried: a failed read must not silently become "no label".
+MRS=""
+for attempt in 1 2 3 4 5; do
+  MRS=$(curl -sf "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/commits/${CI_COMMIT_SHA}/merge_requests" || true)
+  echo "$MRS" | jq -e 'type == "array"' >/dev/null 2>&1 && break
+  echo "reading the commit's merge requests failed (attempt $attempt); retrying"
+  MRS=""; sleep $((attempt * 3))
+done
+LEVEL=$(echo "${MRS:-[]}" | jq -r '[.[] | select(.state == "merged") | .labels[] | select(startswith("autonomy::"))] | first // "none"' |
   sed 's/^autonomy:://')
-MR=$(curl -sf "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/commits/${CI_COMMIT_SHA}/merge_requests" |
-  jq -r '[.[] | select(.state == "merged") | .iid] | first // "none"')
+MR=$(echo "${MRS:-[]}" | jq -r '[.[] | select(.state == "merged") | .iid] | first // "none"')
+[ -z "$MRS" ] && echo "could not read the merge request after 5 attempts: promoting with a manual approval"
 
 # A manual promotion is a blocking approval gate (allow_failure: false), so the
 # pipeline waits for the person and monitor-prod runs right after the click.
