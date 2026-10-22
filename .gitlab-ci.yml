@@ -135,7 +135,7 @@ frontend-e2e:
     - bash ci/verify-frontend-e2e.sh
   artifacts:
     when: always
-    paths: [reports/]
+    paths: [reports/, frontend/test-results/]
     reports:
       junit: reports/junit-frontend.xml
     expire_in: 30 days
