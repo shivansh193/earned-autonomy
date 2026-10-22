@@ -51,16 +51,18 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 | Secure | dependency audit + **static reachability** of each vulnerable function; **Triage agent** verdict per advisory ✅ | rules; Triage agent |
 | Verify | 58 app tests + **replay of 166 recorded real requests** against a fresh database, with **runtime hit counts** ✅ | rules; Validation agent 🚧 |
 | Package | backend image → Artifact Registry ✅ | deterministic |
-| Configure | `terraform plan` on MRs touching `infra/` → risky changes, cost delta ✅ | rules; Infra agent 🚧 |
+| Configure | `terraform plan` on MRs touching `infra/` → risky changes, cost delta, attribute-level diff; **Infra agent** judges what the rules can't see ✅ | rules; Infra agent |
 | Release | bundle → risk → level → **proof card**; **Autonomy Router flow**; after merge, staging deploy and prod promotion **routed by level** (automatic / manual approval) ✅ | rule floor + Router agent |
 | Monitor | prod replay of the canary account against the new and previous revisions, **automatic rollback** by traffic shift, incident issue ✅ | rules; Rollback agent |
-| Govern | audit record per decision; **trust ledger in GCS + calibration**, recorded by the monitor after every release ✅ | deterministic |
+| Govern | audit record per decision; **trust ledger in GCS + calibration**, recorded by the monitor after every release, published as a [public page](https://showcase-4900ab.gitlab.io/) ✅ | deterministic |
 
 ## See it run
 
 - **MR [!2](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/2)**: the pipeline in action. Secure, verify and release jobs ran green, then the Autonomy Router posted the proof card (risk 0.00, adjustment +0.00) and set `autonomy::hands-off`.
 - **MR [!1](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/1)**: the platform probe. What we verified about Duo flows before building on them ([docs/verification-notes.md](docs/verification-notes.md)).
 - The four demo scenarios and their status: [docs/demo-script.md](docs/demo-script.md).
+- **Trust ledger, live**: https://showcase-4900ab.gitlab.io/ (every release, its level and outcome, each area's penalty over time; regenerated after every release).
+- **On a second codebase**: the same pipeline and agents run on VaultScope, an unrelated FastAPI app (350 tests, 22 routes), in a private project in the same group. Results below.
 
 **Live (Google Cloud Run, scale to zero, so the first request after a quiet period takes ~25 s):**
 
@@ -82,9 +84,13 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 | **Planning estimate (live)** | issue #3 (optional `sort` parameter on the items list): the Planning agent read the route modules, posted its blast-radius estimate and set `risk-prior::0.00` + `planned` | issue #3 |
 | **Production rollback (live)** | MR !8 shipped against an Assisted warning; the prod monitor caught `GET /items/` returning 50 instead of 100 items (canary, prod data) and **rolled back in 3.3 s**; the Rollback agent opened incident #2 | [demo-script.md §4](docs/demo-script.md) |
 | **Trust lost and earned back (live)** | `route:GET /api/v1/items/` penalty +0.30 after the rollback, so the clean revert MR !9 was held at **Supervised** (risk 0.30); its clean release halved the penalty to 0.15 | GCS ledger, MR !9 proof card |
-| Releases through the loop (live) | Hands-off auto-promoted to prod: MRs !5, !7 · Supervised (Router raised +0.10): MR !6 · Assisted: MRs !4 (public infra), !8 | MR history |
+| **Autonomy earned (live)** | five clean Hands-off releases in a row (!11, !12, !14, !18, !19) widened the Hands-off threshold from **0.20 to 0.25**, with no human changing a setting | [ledger page](https://showcase-4900ab.gitlab.io/) |
+| **Infra agent (live)** | MR !16 cut the prod request timeout 120 s → 30 s and the startup probe 40 → 10 tries. The plan rules saw two plain updates (0.15, Hands-off). The Infra agent flagged both, plus that the apply would strip the monitor's rollback revision tags: **+0.20 → Supervised**. A first version double-counted with the Router (0.55); fixed so infra findings are counted once | MR !16 |
+| **Blocked (live, VaultScope !4)** | a "tidy-up" of CEF log escaping dropped the `=` escape (log injection in the SIEM export); 1 of 350 tests failed, the engine said **Blocked**, and the Router posted it on the failed pipeline | VaultScope !4 |
+| **Second codebase (live, VaultScope)** | Jinja2 3.1.4's 3 advisories: **0 of 3 reachable** from 22 routes (verified against the templates); a report CSV export came out Hands-off (0.00); report auth came out Supervised, the Router citing the token and HMAC lines | VaultScope !2, !3 |
+| Releases through the loop (live) | Hands-off auto-promoted to prod: MRs !5, !7, !11, !12, !14, !15, !17, !18, !19 · Supervised (Router raised +0.10): MR !6 · Assisted: MRs !4 (public infra), !8 | MR history |
 | Duo credits | about 0.6 per flow run | GitLab Credits dashboard |
-| Tool tests | 56 passing | `tools/tests` |
+| Tool tests | 63 passing | `tools/tests` |
 
 The headline numbers for the video get filled in from the full scenario runs, and only from them.
 
@@ -126,7 +132,7 @@ In GitLab, every MR runs the pipeline. With the `ea-autonomy-router` flow enable
 - The advisory → vulnerable-function map is curated by hand from fix commits; unmapped advisories are scored conservatively.
 - Replay compares against a recording; latency is only scored against a baseline run in the same environment.
 - GitLab Duo `HumanInputComponent` pauses but did not resume after approval in our tests, so human gates use GitLab MR approvals.
-- Not built yet: the Validation and Infra agents. The planning prior is applied by the release job but has not yet been exercised by an MR that closes a planned issue. The first ledger entry (MR !6) was recorded before the enforced-level fix and shows the rule level (hands_off) instead of the enforced Supervised; the ledger is append-only, so it stays as written.
+- Not built yet: the Validation agent. CI job tokens can't read an MR's linked issues, so on a private project the Router applies the Planning agent's prior instead of the release job (it is listed separately on the card). The first ledger entry (MR !6) was recorded before the enforced-level fix and shows the rule level (hands_off) instead of the enforced Supervised; the ledger is append-only, so it stays as written.
 
 ## License and attribution
 
