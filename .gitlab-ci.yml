@@ -34,6 +34,7 @@ stages:
   - deploy-staging
   - route
   - promote
+  - govern
 
 variables:
   UV_VERSION: "0.9.26"
@@ -228,3 +229,25 @@ promote-production:
       - artifact: reports/promote.yml
         job: route-by-autonomy
     strategy: depend
+
+# GOVERN: publish the trust ledger (GitLab Pages) once the release and its prod monitor
+# have finished, including after a rollback. The page is a pure function of the ledger.
+pages:
+  stage: govern
+  extends: .gcp-oidc
+  image: python:3.14-slim
+  cache: []
+  before_script: []
+  needs:
+    - job: promote-production
+      optional: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: always
+  script:
+    - pip install -q --root-user-action=ignore ./tools
+    - ea-ledger pull --bucket "$EA_LEDGER_BUCKET" --out .trust/ledger.jsonl
+    - ea-ledger report --ledger .trust/ledger.jsonl --notes .trust/notes.json
+        --source "gs://$EA_LEDGER_BUCKET/trust/ledger.jsonl" --out public/index.html
+  artifacts:
+    paths: [public]

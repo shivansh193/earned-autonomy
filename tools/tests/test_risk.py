@@ -253,3 +253,54 @@ def test_preexisting_findings_listed_but_not_scored():
     unknown = security_findings(reach, {"hits": {}}, baseline=None)
     assert unknown[0]["new"] is None
     assert decide(bundle(security=unknown), TH, {})["risk"]["final"] > 0.15  # no baseline: scored
+
+
+def test_ledger_report_replays_penalties_per_release():
+    from risk import ledger
+    from risk.report import releases, render
+
+    def dec(mr, level, areas):
+        return {"type": "decision", "id": f"d{mr}", "ts": "2026-10-22T00:00:00+00:00", "mr_iid": mr,
+                "areas": areas, "level": level, "final": 0.3, "rule_score": 0.3, "thresholds": {}}
+
+    entries = [dec(8, "assisted", ["route:GET /x"]), ledger.outcome_entry("d8", "rollback", seconds=3.3),
+               dec(9, "supervised", ["route:GET /x"]), ledger.outcome_entry("d9", "clean")]
+    rel = releases(entries)
+    assert [r["penalties"].get("route:GET /x") for r in rel] == [0.3, 0.15]
+    page = render(entries, notes={"9": "a <note>"})
+    assert "3.3 s" in page and "rollback" in page and "a &lt;note&gt;" in page
+    assert "<script src" not in page  # self-contained
+def test_module_level_hunks_scope_to_the_symbol_they_change(tmp_path):
+    """One file holding every route (VaultScope's api/main.py): editing a request model or
+    a dispatch table touches only the routes that use it; a middleware block touches all."""
+    pkg = tmp_path / "one"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    src = (
+        '"""Doc."""\n'                                    # 1
+        "from fastapi import FastAPI\n"                     # 2
+        "from pydantic import BaseModel\n"                  # 3
+        "app = FastAPI()\n"                                 # 4
+        "class ReportRequest(BaseModel):\n"                 # 5
+        "    type: str\n"                                   # 6
+        "BUILDERS = {'a': 1}\n"                             # 7
+        "if True:\n"                                        # 8
+        "    app.add_middleware(object)\n"                  # 9
+        "@app.post('/report')\n"                            # 10
+        "def report(req: ReportRequest):\n"                 # 11
+        "    return BUILDERS[req.type]\n"                   # 12
+        "@app.get('/jobs')\n"                               # 13
+        "def jobs():\n"                                     # 14
+        "    return []\n"                                   # 15
+    )
+    (pkg / "main.py").write_text(src)
+    idx = build_index(tmp_path, ["one"])
+    rel = "one/main.py"
+    assert routes_touched(idx, [], tmp_path, diff={rel: [(6, 6)]}) == ["POST /report"]
+    assert routes_touched(idx, [], tmp_path, diff={rel: [(7, 7)]}) == ["POST /report"]
+    assert routes_touched(idx, [], tmp_path, diff={rel: [(1, 1), (3, 3)]}) == []
+    assert routes_touched(idx, [], tmp_path, diff={rel: [(9, 9)]}) == ["GET /jobs", "POST /report"]
+    # calls into the standard library (not indexed) must not break the walk
+    (pkg / "main.py").write_text(src.replace("    return []\n", "    import os\n    return os.environ.get('X')\n"))
+    idx = build_index(tmp_path, ["one"])
+    assert routes_touched(idx, [], tmp_path, diff={rel: [(6, 6)]}) == ["POST /report"]

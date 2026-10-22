@@ -125,3 +125,35 @@ def test_findings_map_through_aliases_and_keep_unmapped():
     assert out[0]["function"] == "jinja2.sandbox.SandboxedEnvironment.call"
     assert "_evidence" not in adv["GHSA-q2x7-8rv6-6q7h"]
     assert out[1]["function"] is None and out[1]["cve"] == "GHSA-zzzz-unmapped"
+
+
+def test_function_references_count_as_calls(tmp_path):
+    """A route that picks a function from a dispatch table, or passes one to
+    asyncio.to_thread, still reaches it (seen on VaultScope's report endpoint)."""
+    pkg = tmp_path / "disp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "render.py").write_text(
+        "def pdf(x):\n    return sink(x)\n\n"
+        "def html(x):\n    return x\n\n"
+        "def sink(x):\n    return x\n"
+    )
+    (pkg / "main.py").write_text(
+        "import asyncio\n"
+        "from fastapi import FastAPI\n"
+        "from disp import render\n\n"
+        "app = FastAPI()\n"
+        "BUILDERS = {'pdf': ('pdf', render.pdf), 'html': ('html', lambda x: render.html(x))}\n\n"
+        "@app.post('/report/{kind}')\n"
+        "async def report(kind: str):\n"
+        "    suffix, builder = BUILDERS[kind]\n"
+        "    return await asyncio.to_thread(builder, kind)\n\n"
+        "@app.get('/other')\n"
+        "def other():\n"
+        "    return 1\n"
+    )
+    idx = build_index(tmp_path, ["disp"])
+    for fn in ("disp.render.pdf", "disp.render.sink", "disp.render.html"):
+        res = reachability(idx, fn)
+        assert res["reachable"] is True, fn
+        assert res["routes"] == ["POST /report/{kind}"], fn

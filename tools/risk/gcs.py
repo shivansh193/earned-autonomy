@@ -118,7 +118,19 @@ def main(argv: list[str] | None = None) -> int:
             s.add_argument("--out", type=Path, required=True)
         else:
             s.add_argument("--entries", type=Path, required=True)
+    r = sub.add_parser("report", help="render the trust ledger as one HTML page")
+    r.add_argument("--ledger", type=Path, required=True)
+    r.add_argument("--out", type=Path, required=True)
+    r.add_argument("--notes", type=Path, help="JSON {mr_iid: note} shown beside a release")
+    r.add_argument("--source", default="")
     a = p.parse_args(argv)
+    if a.cmd == "report":
+        from datetime import UTC, datetime
+
+        from risk.report import main_report
+        main_report(a.ledger, a.out, a.source, datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"), a.notes)
+        sys.stdout.write(f"report: {a.out}\n")
+        return 0
     token = access_token()
     if a.cmd == "pull":
         data, gen = download(a.bucket, a.object, token)
