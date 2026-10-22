@@ -20,4 +20,9 @@ done
 curl -sf http://127.0.0.1:8000/ | grep -q 'id="root"' || { echo "the built frontend is not served at /"; exit 1; }
 cd frontend
 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8000 PLAYWRIGHT_JUNIT_OUTPUT_NAME=../reports/junit-frontend.xml \
-  bunx playwright test --project=chromium --reporter=junit
+  bunx playwright test --project=chromium --reporter=junit || {
+    status=$?
+    echo "--- login diagnostic ---"
+    PLAYWRIGHT_BASE_URL=http://127.0.0.1:8000 node tests/utils/login-debug.mjs || true
+    exit $status
+  }
