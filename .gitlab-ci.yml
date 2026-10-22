@@ -69,6 +69,13 @@ default:
     - bash ci/setup.sh
     - export PATH="$CI_PROJECT_DIR/.venv/bin:$PATH"
 
+# Scheduled pipelines on main only run the Hands-off merge job below.
+.not-scheduled:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: on_success
+
 .postgres:
   services:
     - name: postgres:18
@@ -76,6 +83,7 @@ default:
 
 dependency-audit-reachability:
   stage: secure
+  extends: .not-scheduled
   variables:
     GIT_DEPTH: "0"  # the MR's target-branch commit, to tell new findings from pre-existing ones
   script:
@@ -87,7 +95,7 @@ dependency-audit-reachability:
 
 test:
   stage: verify
-  extends: .postgres
+  extends: [.postgres, .not-scheduled]
   needs: []
   script:
     - bash ci/verify-tests.sh
@@ -100,7 +108,7 @@ test:
 
 replay-recorded-traffic:
   stage: verify
-  extends: .postgres
+  extends: [.postgres, .not-scheduled]
   needs: [dependency-audit-reachability]
   script:
     - bash ci/verify-replay.sh
@@ -113,6 +121,7 @@ replay-recorded-traffic:
 # Playwright tests against the backend serving that build.
 frontend-check:
   stage: verify
+  extends: .not-scheduled
   image: oven/bun:1.3
   needs: []
   cache: []
@@ -126,6 +135,7 @@ frontend-check:
 
 frontend-e2e:
   stage: verify
+  extends: .not-scheduled
   image: mcr.microsoft.com/playwright:v1.63.0-noble
   services:
     - name: postgres:18
@@ -152,8 +162,12 @@ frontend-e2e:
 
 autonomy-decision:
   stage: release
-  # Runs even when tests fail: failing tests are evidence (the level becomes Blocked).
-  when: always
+  # Never on a schedule; otherwise runs even when tests fail: failing tests are evidence
+  # (the level becomes Blocked).
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: always
   id_tokens:  # read the shared trust ledger from GCS (keyless)
     GITLAB_OIDC_TOKEN:
       aud: https://gitlab.com
@@ -200,6 +214,8 @@ configure-plan:
 
 .main-only:
   rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 .gcp-oidc:
@@ -286,6 +302,8 @@ pages:
     - job: promote-production
       optional: true
   rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: always
   script:
@@ -295,3 +313,18 @@ pages:
         --source "gs://$EA_LEDGER_BUCKET/trust/ledger.jsonl" --out public/index.html
   artifacts:
     paths: [public]
+
+# RELEASE, Hands-off: on a schedule (main only, where the protected EA_GITLAB_TOKEN
+# exists), merge the open MRs whose current proof card says hands_off and that change
+# none of the system's own controls. See ci/hands_off_merge.py.
+hands-off-merge:
+  stage: release
+  image: python:3.14-slim
+  cache: []
+  before_script: []
+  needs: []
+  interruptible: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - python ci/hands_off_merge.py

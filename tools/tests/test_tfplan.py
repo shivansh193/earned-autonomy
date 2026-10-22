@@ -102,3 +102,14 @@ def test_attribute_changes_list_what_changes_and_mask_sensitive():
     assert changed["template[0].containers[0].env[0].value"] == [None, "(sensitive)"]
     assert "s3cret" not in str(out)
     assert out["changes"][0]["risky"] is False  # the rules don't see a capacity cut; the Infra agent should
+
+
+def test_carbon_delta_follows_always_on_capacity():
+    p = plan(rc("google_cloud_run_v2_service.api_prod", "google_cloud_run_v2_service", ["update"],
+                run_service("api-prod", min_instances=0), run_service("api-prod", min_instances=1)))
+    out = analyse(p)
+    # 1 vCPU + 0.5 GiB always on: (2.485 + 0.196) W x 1.1 PUE x 720 h = 2.12 kWh x 0.413 = 0.88 kg
+    assert 0.8 < out["carbon_delta_kg_co2e_month"] < 0.95
+    back = analyse(plan(rc("google_cloud_run_v2_service.api_prod", "google_cloud_run_v2_service", ["update"],
+                           run_service("api-prod", min_instances=1), run_service("api-prod", min_instances=0))))
+    assert back["carbon_delta_kg_co2e_month"] == -out["carbon_delta_kg_co2e_month"]
