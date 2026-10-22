@@ -2,6 +2,8 @@
 # CONFIGURE: terraform plan for an MR that touches infra/. Both services keep their
 # current images, so the plan shows only the infrastructure change itself.
 # Leaves reports/plan.json for the release stage (ea-tfplan -> risk evidence).
+# A plan only reads state, so it takes no lock: a deploy or another MR's plan running at
+# the same time must not cost this MR its infrastructure evidence.
 set -eu
 apk add -q --no-cache curl jq >/dev/null
 . ci/gcp-token.sh
@@ -22,7 +24,7 @@ PROD_IMAGE="${PROD_IMAGE:-$PLACEHOLDER}"
 
 cd infra
 terraform init -input=false -no-color >/dev/null
-terraform plan -input=false -no-color -lock-timeout=60s -out=plan.out \
+terraform plan -input=false -no-color -lock=false -out=plan.out \
   -var "staging_image=${STAGING_IMAGE}" -var "prod_image=${PROD_IMAGE}"
 terraform show -json plan.out > ../reports/plan.json
 cd ..
