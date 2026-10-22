@@ -15,6 +15,51 @@ from typing import Any
 
 from risk import ledger
 
+# CI energy, Cloud Carbon Footprint's method: a GitLab.com small Linux runner is 2 vCPU and
+# 8 GiB; 2.485 W per vCPU at 50% utilisation, 0.392 W per GiB, PUE 1.1. Grid intensity of
+# the runners' region (GCP us-east1). VERIFY both against the published sources before
+# quoting; they are estimates, shown as such on the page.
+RUNNER = {"vcpu": 2, "gib": 8, "w_per_vcpu": 2.485, "w_per_gib": 0.392, "pue": 1.1, "kg_co2e_per_kwh": 0.56}
+
+
+def runner_g_co2e(seconds: float) -> float:
+    watts = (RUNNER["vcpu"] * RUNNER["w_per_vcpu"] + RUNNER["gib"] * RUNNER["w_per_gib"]) * RUNNER["pue"]
+    return watts * seconds / 3600 / 1000 * RUNNER["kg_co2e_per_kwh"] * 1000
+
+
+def pipeline_seconds(api: str, project: str, pipeline_id: Any) -> float | None:
+    """Sum of job durations of a pipeline and its child pipelines (public project API)."""
+    import urllib.parse
+    import urllib.request
+
+    if not pipeline_id:
+        return None
+    base = f"{api}/projects/{urllib.parse.quote(project, safe='')}/pipelines/{pipeline_id}"
+    try:
+        with urllib.request.urlopen(f"{base}/jobs?per_page=100", timeout=30) as r:
+            total = sum(j.get("duration") or 0 for j in json.load(r))
+        with urllib.request.urlopen(f"{base}/bridges?per_page=100", timeout=30) as r:
+            for b in json.load(r):
+                child = (b.get("downstream_pipeline") or {}).get("id")
+                if child:
+                    total += pipeline_seconds(api, project, child) or 0
+        return total
+    except Exception:
+        return None
+
+
+def footprint(entries: list[dict[str, Any]], api: str, project: str) -> dict[str, dict[str, float]]:
+    """CI seconds and g CO2e per release: the MR's evidence pipeline plus the production
+    promotion pipeline (prod deploy and monitor). Keyed by decision id."""
+    out = {}
+    for d in (e for e in entries if e.get("type") == "decision"):
+        secs = [s for s in (pipeline_seconds(api, project, d.get("pipeline_id")),
+                            pipeline_seconds(api, project, d.get("deployed_pipeline_id"))) if s]
+        if secs:
+            total = sum(secs)
+            out[d["id"]] = {"ci_minutes": round(total / 60, 1), "g_co2e": round(runner_g_co2e(total), 1)}
+    return out
+
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a"]  # categorical slots 1-3 (validated all-pairs); more areas fold
 SERIES_DARK = ["#3987e5", "#d95926", "#199e70"]
 LEVEL = {"hands_off": ("Hands-off", "lv-ho"), "supervised": ("Supervised", "lv-su"),
@@ -86,8 +131,9 @@ def penalty_chart(rel: list[dict[str, Any]]) -> tuple[str, list[str]]:
 
 
 def render(entries: list[dict[str, Any]], *, source: str = "", generated: str = "",
-           notes: dict[str, str] | None = None) -> str:
+           notes: dict[str, str] | None = None, footprints: dict[str, dict[str, float]] | None = None) -> str:
     notes = notes or {}
+    footprints = footprints or {}
     rel = releases(entries)
     st = ledger.state(entries)
     th = st["thresholds"]
@@ -181,6 +227,7 @@ each clean release that touches the area halves it. The penalty is added to the 
 <tbody>{rows}</tbody></table></div>
 
 <h2>Threshold changes</h2><ul>{hist}</ul>
+{_footprint_html(rel, footprints)}
 <footer>Generated {_esc(generated)} from <code>{_esc(source)}</code> ({len(entries)} entries). The ledger is append-only;
 this page is a pure function of it (<code>ea-ledger report</code>).</footer>
 </main>
@@ -194,8 +241,27 @@ c.addEventListener('mouseleave',function(){{t.style.display='none'}})}})();
 """
 
 
-def main_report(ledger_path: Path, out: Path, source: str, generated: str, notes_path: Path | None) -> None:
+def _footprint_html(rel: list[dict[str, Any]], fp: dict[str, dict[str, float]]) -> str:
+    rows = [(r, fp[r["decision"]["id"]]) for r in rel if r["decision"]["id"] in fp]
+    if not rows:
+        return ""
+    total_min = sum(f["ci_minutes"] for _, f in rows)
+    total_g = sum(f["g_co2e"] for _, f in rows)
+    body = "".join(f"<tr><td>!{_esc(r['decision'].get('mr_iid'))}</td><td class='num'>{f['ci_minutes']:.1f}</td>"
+                   f"<td class='num'>{f['g_co2e']:.1f}</td></tr>" for r, f in reversed(rows))
+    return (f"<h2>Footprint</h2><p class='muted' style='font-size:13px'>CI time per release (the MR's evidence "
+            f"pipeline plus the production promotion), turned into energy and emissions with Cloud Carbon Footprint's "
+            f"method; estimates. Production itself scales to zero: no always-on instances.</p>"
+            f"<div class='scroll'><table><thead><tr><th>MR</th><th class='num'>CI minutes</th>"
+            f"<th class='num'>g CO2e</th></tr></thead><tbody>{body}<tr><td><b>Total</b></td>"
+            f"<td class='num'><b>{total_min:.1f}</b></td><td class='num'><b>{total_g:.1f}</b></td></tr>"
+            f"</tbody></table></div>")
+
+
+def main_report(ledger_path: Path, out: Path, source: str, generated: str, notes_path: Path | None,
+                api: str | None = None, project: str | None = None) -> None:
     entries = ledger.load(ledger_path)
     notes = json.loads(notes_path.read_text(encoding="utf-8")) if notes_path and notes_path.exists() else {}
+    fp = footprint(entries, api, project) if api and project else {}
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(render(entries, source=source, generated=generated, notes=notes), encoding="utf-8")
+    out.write_text(render(entries, source=source, generated=generated, notes=notes, footprints=fp), encoding="utf-8")
