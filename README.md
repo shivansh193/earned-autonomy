@@ -46,7 +46,7 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 
 | Stage | What runs | Who decides |
 |---|---|---|
-| Plan | Planning flow: blast radius, risk prior 🚧 | Planning agent |
+| Plan | **Planning agent**: blast-radius estimate + bounded risk prior when an issue is created ✅ | Planning agent |
 | Create | MRs from people and agents; Triage flow opens fix MRs 🚧 | Triage agent |
 | Secure | dependency audit + **static reachability** of each vulnerable function ✅ | rules; Triage agent 🚧 |
 | Verify | 58 app tests + **replay of 166 recorded real requests** against a fresh database, with **runtime hit counts** ✅ | rules; Validation agent 🚧 |
