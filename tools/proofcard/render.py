@@ -95,6 +95,8 @@ def render(bundle: dict[str, Any], *, audit_url: str | None = None) -> str:
     ]
     if auto.get("blocked_reasons"):
         out.append("\n**Blocked:** " + "; ".join(auto["blocked_reasons"]))
+    if auto.get("ceiling"):
+        out.append(f"\n**Held at {name}:** {auto['ceiling']}.")
 
     out += ["", "### Why this level", "", "| Evidence | Points |", "|---|---|"]
     for c in risk["contributions"]:
