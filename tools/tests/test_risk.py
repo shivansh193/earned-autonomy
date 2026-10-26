@@ -321,3 +321,34 @@ def test_several_junit_reports_are_summed(tmp_path):
     b.write_text('<testsuites><testsuite tests="7" failures="0" errors="0" skipped="0"/></testsuites>')
     assert _tests([a, b, tmp_path / "missing.xml"]) == {"passed": 14, "failed": 1, "skipped": 2}
     assert _tests([tmp_path / "missing.xml"]) is None
+
+
+def _bundle_for(**kw):
+    base = dict(mr_iid=1, commit="c", pipeline_id=1, changed_files=["backend/app/x.py"], routes=[],
+                tests={"passed": 1, "failed": 0, "skipped": 0}, security=[],
+                replay={"status_mismatches": 0, "body_diffs_real": 0}, infra=None)
+    base.update(kw)
+    return build_bundle(**base)
+
+
+def test_infrastructure_is_never_hands_off_however_wide_the_threshold():
+    infra = {"changes": [{"type": "update", "resource": "google_cloud_run_v2_service.api[\"prod\"]", "risky": False}],
+             "cost_delta_usd_month": 0}
+    wide = {"hands_off_max": 0.3, "supervised_max": 0.5}
+    d = decide(_bundle_for(changed_files=["infra/main.tf"], infra=infra), wide, {})
+    assert d["risk"]["final"] <= 0.3
+    assert d["autonomy"]["level"] == "supervised"
+    assert "infrastructure" in d["autonomy"]["ceiling"]
+    app = decide(_bundle_for(), wide, {})
+    assert app["autonomy"]["level"] == "hands_off" and app["autonomy"]["ceiling"] is None
+
+
+def test_a_refused_request_that_now_succeeds_blocks():
+    report = {"requests": 10, "status_mismatches": 2, "body_diff_details": [],
+              "status_mismatch_details": [{"seq": 4, "endpoint": "GET /api/v1/items/{id}", "expected": 403, "actual": 200},
+                                          {"seq": 5, "endpoint": "GET /api/v1/items/{id}", "expected": 200, "actual": 403}]}
+    d = decide(_bundle_for(replay=replay_summary(report, None)), dict(ledger.INITIAL), {})
+    assert d["autonomy"]["level"] == "blocked"
+    assert "access widened" in d["autonomy"]["blocked_reasons"][0]
+    tighter = {**report, "status_mismatch_details": report["status_mismatch_details"][1:]}
+    assert decide(_bundle_for(replay=replay_summary(tighter, None)), dict(ledger.INITIAL), {})["autonomy"]["level"] != "blocked"
