@@ -42,7 +42,14 @@ Hands-off** (no false alarms). **2 misses**, both on the lenient side, which is 
 
 ## After the fixes
 
-Cases 09 and 10 are re-run on top of the fixes; results are added below, alongside (not instead
-of) the runs above.
+Cases 09 and 10 re-run on 2026-10-26 (20:15–20:25 UTC) with the fixes merged into `main`
+(!45, !46, !47). Added alongside the runs above, not instead of them.
 
-_Pending._
+| # | MR | Expected | Before | After | What decided it | Result |
+|---|---|---|---|---|---|---|
+| 09 | [!41](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/41) | Supervised | Hands-off (miss) | **Supervised** | plan worked (2 infra changes +0.15), Infra agent +0.15 = 0.30; card: "Held at Supervised: infrastructure changes are at least Supervised" | ✅ exact |
+| 10 | [!42](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/42) | Blocked | Assisted (miss) | **Blocked** | "1 replayed request(s) that were refused now succeed (access widened: GET /api/v1/items/{id})"; Router +0.50 (ownership filter removed) | ✅ exact |
+
+**After the fixes: 12 of 12 pass** (10 exact, 2 stricter). The other ten cases were not re-run:
+neither fix can make them more lenient (the infra ceiling only applies to infra changes; access
+widening only adds a Blocked reason, and none of them turned a refused request into a success).
