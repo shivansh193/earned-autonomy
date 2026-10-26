@@ -227,6 +227,9 @@ def replay_summary(report: dict[str, Any] | None, verdicts: list[dict[str, Any]]
         "endpoints": report.get("endpoints"),
         "status_mismatches": report.get("status_mismatches", 0),
         "status_mismatch_details": report.get("status_mismatch_details", [])[:10],
+        # Requests the recording saw refused (401/403/404) that now succeed: access widened.
+        "access_widened": [d for d in report.get("status_mismatch_details", [])
+                           if d.get("expected") in (401, 403, 404) and 200 <= (d.get("actual") or 0) < 300][:10],
         "body_diffs_real": real,
         "body_diffs_noise": noise,
         "body_diffs": diffs[:20],

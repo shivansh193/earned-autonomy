@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -59,8 +60,13 @@ def why_not(pid: str, mr: dict) -> str | None:
     card = next((n for n in notes if "## Autonomy:" in n.get("body", "")), None)
     if card is None or card["author"]["username"] != ROUTER_ACCOUNT:
         return "no proof card from the Autonomy Router"
-    if f"Pipeline {pipe.get('id')}" not in card["body"] or "**Final: hands_off**" not in card["body"]:
-        return "the newest proof card is not a Hands-off verdict for the current pipeline"
+    # GitLab can run more than one pipeline for the same commit; the card may name any of
+    # them, as long as that pipeline passed on the MR's current commit.
+    _, pipes = api("GET", f"/projects/{pid}/merge_requests/{iid}/pipelines?per_page=50")
+    current = {p["id"] for p in pipes if p.get("sha") == full.get("sha") and p.get("status") == "success"}
+    named = {int(x) for x in re.findall(r"Pipeline (\d+)", card["body"])}
+    if not (named & current) or "**Final: hands_off**" not in card["body"]:
+        return "the newest proof card is not a Hands-off verdict for a passed pipeline of the current commit"
     touched: set[str] = set()
     for page in range(1, 51):  # every changed file, not just the first page
         _, diffs = api("GET", f"/projects/{pid}/merge_requests/{iid}/diffs?per_page=100&page={page}")

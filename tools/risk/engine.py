@@ -90,6 +90,11 @@ def rule_score(bundle: dict[str, Any], rules: Rules | None = None) -> Score:
             s.add("replay.regression", r.replay_regression,
                   f"{replay.get('status_mismatches', 0)} status mismatches, "
                   f"{replay.get('body_diffs_real', 0)} real body diffs")
+        widened = replay.get("access_widened") or []
+        if widened:
+            eps = sorted({w.get("endpoint", "?") for w in widened})
+            s.blocked.append(f"{len(widened)} replayed request(s) that were refused now succeed "
+                             f"(access widened: {', '.join(eps[:3])})")
         if replay.get("latency_regression"):
             s.add("replay.latency", r.latency_regression,
                   f"p95 {replay.get('p95_ms_before')} -> {replay.get('p95_ms_after')} ms (>20%)")
@@ -157,6 +162,12 @@ def decide(
         level = "supervised"
     else:
         level = "assisted"
+    # Trust earned on other kinds of change never carries over to infrastructure: a real infra
+    # change is at least Supervised, whatever the thresholds have widened to.
+    ceiling = None
+    infra_changes = [c for c in (bundle.get("infra") or {}).get("changes", []) if c.get("type") != "no-op"]
+    if level == "hands_off" and (infra_changes or (bundle.get("change_summary") or {}).get("infra_touched")):
+        level, ceiling = "supervised", "infrastructure changes are at least Supervised"
     return {
         "risk": {
             "rule_score": rule_total,
@@ -170,6 +181,7 @@ def decide(
         "autonomy": {
             "level": level,
             "blocked_reasons": s.blocked,
+            "ceiling": ceiling,
             "thresholds": dict(thresholds),
         },
     }
