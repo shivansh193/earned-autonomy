@@ -20,6 +20,9 @@ def fake_api(mr=None, notes=None, diffs=None):
     def api(method, path, body=None):
         if path.endswith("/notes?sort=desc&order_by=created_at&per_page=50"):
             return 200, notes
+        if "/pipelines?" in path:
+            return 200, [{"id": 77, "sha": "abc", "status": "success"}, {"id": 78, "sha": "abc", "status": "success"},
+                         {"id": 70, "sha": "old", "status": "success"}]
         if "/diffs" in path:
             return 200, diffs
         return 200, mr
@@ -44,7 +47,7 @@ def test_never_merges_changes_to_its_own_controls(monkeypatch, mr):
 def test_card_must_be_for_the_current_pipeline_and_from_the_router(monkeypatch, mr):
     stale = [{"body": CARD.replace("Pipeline 77", "Pipeline 76"), "author": {"username": "ai-ea-autonomy-router-gitlab-ai-hackathon"}}]
     monkeypatch.setattr(hom, "api", fake_api(notes=stale))
-    assert "current pipeline" in hom.why_not("1", mr)
+    assert "current commit" in hom.why_not("1", mr)
     forged = [{"body": CARD, "author": {"username": "someone"}}]
     monkeypatch.setattr(hom, "api", fake_api(notes=forged))
     assert "Autonomy Router" in hom.why_not("1", mr)
@@ -80,3 +83,12 @@ def test_a_control_file_past_the_first_page_still_blocks(monkeypatch, mr):
 def test_unchecked_merge_status_waits(monkeypatch, mr):
     monkeypatch.setattr(hom, "api", fake_api(mr={"detailed_merge_status": "unchecked"}))
     assert "unchecked" in hom.why_not("1", mr)
+
+
+def test_card_for_another_passed_pipeline_of_the_same_commit_counts(monkeypatch, mr):
+    other = [{"body": CARD.replace("Pipeline 77", "Pipeline 78"), "author": {"username": "ai-ea-autonomy-router-gitlab-ai-hackathon"}}]
+    monkeypatch.setattr(hom, "api", fake_api(notes=other))
+    assert hom.why_not("1", mr) is None
+    old = [{"body": CARD.replace("Pipeline 77", "Pipeline 70"), "author": {"username": "ai-ea-autonomy-router-gitlab-ai-hackathon"}}]
+    monkeypatch.setattr(hom, "api", fake_api(notes=old))
+    assert "current commit" in hom.why_not("1", mr)
