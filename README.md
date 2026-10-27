@@ -2,6 +2,12 @@
 
 **Autonomy isn't a setting. It's earned, per change.** Every merge request gets evidence, a risk score and an autonomy level, and every autonomous decision ships with its proof.
 
+Three things you can check in a few minutes ([CLAIMS.md](CLAIMS.md) has one link for each):
+
+- **An agent's fix reached production with no human step.** A vulnerable dependency landed on `main`; the Triage agent opened the fix MR, the Router rated it Hands-off, and the system merged, promoted and monitored it ([!52](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/52)).
+- **Production has the last word, and the system remembers.** A change caught in prod was rolled back in 3.3 s, the next change to that route was held for a person because of it, and clean releases earned the autonomy back, per area ([trust ledger](https://showcase-4900ab.gitlab.io/)).
+- **We publish our misses.** A benchmark with the expected answers committed before the runs (10/12, then 12/12 after the fixes), plus a live miss found an hour before the fix that closed it ([RESULTS.md](benchmark/RESULTS.md)).
+
 A [GitLab Transcend "Life After Code"](https://gitlab-transcend.devpost.com/) entry (Path B), applied to the MIT-licensed [fastapi/full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template) (46k GitHub stars): its FastAPI backend, React frontend and Terraform-managed Cloud Run infrastructure all go through the loop.
 
 ## Judge TL;DR: verify it in 5 minutes
@@ -17,8 +23,10 @@ A [GitLab Transcend "Life After Code"](https://gitlab-transcend.devpost.com/) en
 | Security findings are scored by **reachability**, not severity | [!12](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/12) (Triage agent opened the fix MR); on a second codebase, Jinja2's 3 advisories: 0 reachable |
 | Work is risk-scored **before code exists** | issue [#3](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/issues/3) (Planning agent's blast-radius estimate and `risk-prior::` label) |
 | The whole app is tested and deployed: **62 Playwright UI tests** and 58 backend tests on every MR, replay of 166 real requests, the image built on MRs that change it, canary replay and a UI check in prod. The UI tests caught a real bug before prod: the build baked in the dev `.env`'s `localhost:8000` API address | any MR pipeline, e.g. [!23](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/23) |
-| It's not tied to one app | VaultScope, an unrelated FastAPI app (350 tests): Hands-off, Supervised (planning prior applied) and **Blocked** (a failing test) verdicts, live |
-| Sustainability | each release's CI footprint (about 7 minutes, 0.6 g CO2e) and the carbon delta of every infra change, on the ledger page and proof cards; prod scales to zero |
+| It's not tied to one app | VaultScope, an unrelated FastAPI app (350 tests): Hands-off, Supervised (planning prior applied) and **Blocked** (a failing test) verdicts, live ([evidence](docs/vaultscope.md), [code](https://github.com/shivansh193/vaultscope)) |
+| An agent's fix ships with **no human step** | advisory on `main` → Triage agent's fix MR [!52](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/52) → re-run as a person (GitLab starts no flow on bot pipelines) → Router: Hands-off → merged by the scheduled job → promoted → monitor clean. Oct 27 (UTC): advisory on `main` 03:24, fix MR opened by the agent 03:32, re-run 03:44, merged 03:54, [promoted](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/jobs/17490954710) 03:59, [monitor clean](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/jobs/17490954711) 04:01: 35 minutes, no human step |
+| A **live miss**, published and fixed | [!51](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/51) added a known advisory and came out Hands-off at exactly the widened threshold; [!53](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/53): adding an advisory is now at least Supervised ([RESULTS.md](benchmark/RESULTS.md#a-live-miss-after-the-benchmark)) |
+| Sustainability | documentation-only MRs skip the tests, replay and browser tests they can't change (DOCS_SAVING); each release's CI footprint (about 7 minutes, 0.6 g CO2e) and the carbon delta of every infra change, on the ledger page and proof cards; prod scales to zero |
 
 Live app: https://api-prod-gkozang2ta-uc.a.run.app (first request after idle takes ~25 s: scale to zero).
 
@@ -80,7 +88,7 @@ Full map: [docs/stages.md](docs/stages.md). ✅ running, 🚧 next.
 - **MR [!1](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/1)**: the platform probe. What we verified about Duo flows before building on them ([docs/verification-notes.md](docs/verification-notes.md)).
 - The four demo scenarios and their status: [docs/demo-script.md](docs/demo-script.md).
 - **Trust ledger, live**: https://showcase-4900ab.gitlab.io/ (every release, its level and outcome, each area's penalty over time; regenerated after every release).
-- **On a second codebase**: the same pipeline and agents run on VaultScope, an unrelated FastAPI app (350 tests, 22 routes), in a private project in the same group. Results below.
+- **On a second codebase**: the same pipeline and agents run on VaultScope, an unrelated FastAPI app (350 tests, 22 routes), in a private project in the same group; the code is public at [github.com/shivansh193/vaultscope](https://github.com/shivansh193/vaultscope) and the verdicts are in [docs/vaultscope.md](docs/vaultscope.md). Results below.
 
 **Live (Google Cloud Run, scale to zero, so the first request after a quiet period takes ~25 s):**
 
