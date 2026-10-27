@@ -20,7 +20,7 @@ on any difference, and writes the outcome to a trust ledger that recalibrates au
 | 5 | **Trust is earned back:** penalties halve with clean releases, and the Hands-off threshold widened 0.20 → 0.25 → 0.30 on its own | [trust ledger page](https://showcase-4900ab.gitlab.io/) |
 | 6 | **Agents catch what rules can't:** reviewing the auto-merge code itself, the Router found three security flaws, all fixed before merge | [MR !22](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/22) |
 | 7 | **Measured, not claimed:** 12 seeded changes, expected levels committed before any run; 10/12 as run, misses published and fixed, then 12/12. A live miss on Oct 27 (a known advisory shipped hands-off) was published and fixed within the hour | [benchmark/RESULTS.md](benchmark/RESULTS.md) |
-| 8 | **Evidence costs only what it can tell you:** a documentation-only MR skips the tests, replay and browser tests it can't change (DOCS_SAVING), and a code change with missing evidence is still Blocked | DOCS_MR_LINK |
+| 8 | **Evidence costs only what it can tell you:** a documentation-only MR skips the tests, replay and browser tests it can't change (a docs MR's checks went from 7.3 to 0.8 runner-minutes, −89%: [!48](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/48) before, [!54](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/54) after), and a code change with missing evidence is still Blocked | [MR !54](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/54) |
 
 ## Every stage, with a real run
 
@@ -38,7 +38,7 @@ on any difference, and writes the outcome to a trust ledger that recalibrates au
 
 ## Sustainability
 
-- **Docs MRs skip what they can't change:** DOCS_SAVING_LONG
+- **Docs MRs skip what they can't change:** a documentation-only MR's checks went from 7.3 runner-minutes ([!48](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/48)) to 0.77 ([!54](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/54)): −89%, about 0.5 g CO2e less each (Cloud Carbon Footprint method, 2 vCPU / 8 GiB runner, 0.56 kg/kWh). Docs-only changes are 6.5% of the template's 752 upstream PRs and 4 of our 54, so this saves roughly 6% of all MR CI energy: modest, but measured, and a code change with missing evidence is still Blocked.
 - **CI footprint per release** on the ledger page (Cloud Carbon Footprint method; runner 2 vCPU / 8 GiB).
 - **Carbon delta on every infrastructure change**, on the proof card ([MR !16](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/16)).
 - **Production scales to zero** between requests.
