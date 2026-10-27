@@ -53,3 +53,17 @@ Cases 09 and 10 re-run on 2026-10-26 (20:15–20:25 UTC) with the fixes merged i
 **After the fixes: 12 of 12 pass** (10 exact, 2 stricter). The other ten cases were not re-run:
 neither fix can make them more lenient (the infra ceiling only applies to infra changes; access
 widening only adds a Blocked reason, and none of them turned a refused request into a success).
+
+## A live miss after the benchmark
+
+Not a seeded case: found on 2026-10-27 while demonstrating the agent-written fix loop.
+
+| MR | Change | Should have been | Was | What decided it |
+|---|---|---|---|---|
+| [!51](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/51) | `certifi` pinned back to 2026.6.17, affected by PYSEC-2026-4320 | Supervised | **Hands-off**, merged by the system at 03:24 UTC | the advisory's reachability can't be proven either way (a CA bundle has no vulnerable function), scored +0.30: exactly the Hands-off threshold trust had widened to |
+
+The same lesson as case 09, from a different direction: trust earned on other changes widened
+one global threshold, and a change that adds a known advisory fit under it. Fix
+([!53](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/53)): like infrastructure, a change that adds an advisory not proven
+unreachable is at least Supervised, whatever the thresholds have grown to. Removing a finding
+doesn't trigger it, so the Triage agent's fix ([!52](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/43529136/showcase/-/merge_requests/52)) still ships hands-off.
