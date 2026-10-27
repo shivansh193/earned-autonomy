@@ -175,6 +175,13 @@ def decide(
     infra_changes = [c for c in (bundle.get("infra") or {}).get("changes", []) if c.get("type") != "no-op"]
     if level == "hands_off" and (infra_changes or (bundle.get("change_summary") or {}).get("infra_touched")):
         level, ceiling = "supervised", "infrastructure changes are at least Supervised"
+    # Same for security: a change that brings in a known advisory, not proven unreachable, never
+    # ships hands-off however wide the threshold has grown (a live miss: MR !51 came out at
+    # exactly the widened 0.30).
+    introduced = [f for f in bundle.get("security") or [] if f.get("new") is not False and f.get("static_reachable") is not False]
+    if level == "hands_off" and introduced:
+        names = ", ".join(sorted({f"{f.get('cve') or 'advisory'} ({f.get('package')})" for f in introduced}))
+        level, ceiling = "supervised", f"a change that adds a known advisory is at least Supervised: {names}"
     return {
         "risk": {
             "rule_score": rule_total,

@@ -43,7 +43,8 @@ def test_reachable_but_not_exercised_cve_is_supervised_scale():
     f = {"cve": "CVE-1", "package": "p", "function": "p.f", "severity": "high",
          "static_reachable": True, "paths": [], "runtime_hits": 0}
     d = decide(bundle(security=[f]), TH, {})
-    assert d["risk"]["final"] == 0.15 and d["autonomy"]["level"] == "hands_off"
+    # scored low, but adding a known advisory is held at Supervised (security ceiling)
+    assert d["risk"]["final"] == 0.15 and d["autonomy"]["level"] == "supervised" and d["autonomy"]["ceiling"]
     f2 = dict(f, runtime_hits=4)
     d2 = decide(bundle(security=[f2]), TH, {})
     assert d2["risk"]["final"] == 0.5 and d2["autonomy"]["level"] == "supervised"
@@ -369,3 +370,15 @@ def test_skipped_evidence_on_a_code_change_still_blocks():
     assert decide(b, TH, {})["autonomy"]["blocked_reasons"] == ["no test results"]
     from risk.bundle import docs_only
     assert not docs_only([]) and not docs_only(["docs/x.md", "uv.lock"]) and docs_only(["LICENSE", "a/b.md"])
+
+
+def test_a_new_advisory_never_ships_hands_off_even_at_a_wide_threshold():
+    f = {"cve": "PYSEC-2026-4320", "package": "certifi", "function": None, "severity": "unknown",
+         "static_reachable": None, "runtime_hits": None, "new": True}
+    wide = {"hands_off_max": 0.30, "supervised_max": 0.50}
+    d = decide(bundle(routes=(), security=[f], changed=("uv.lock",)), wide, {})
+    assert d["risk"]["final"] == 0.30 and d["autonomy"]["level"] == "supervised"
+    assert "PYSEC-2026-4320 (certifi)" in d["autonomy"]["ceiling"]
+    # the fix removes it; a finding already on main, or proven unreachable, doesn't hold a change
+    for g in ({**f, "new": False}, {**f, "static_reachable": False}):
+        assert decide(bundle(routes=(), security=[g], changed=("uv.lock",)), wide, {})["autonomy"]["level"] == "hands_off"
