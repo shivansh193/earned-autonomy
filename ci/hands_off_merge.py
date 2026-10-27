@@ -14,6 +14,12 @@ merged only when all of these hold:
   (CI, the flows, the risk engine, the ledger, the infrastructure). Those wait for a person.
 
 Each merge gets a note saying why. Standard library only. Exit 0 even when nothing merges.
+
+Agent-opened fix MRs (label `triage`) need one more step first: GitLab starts no Duo flow
+for a pipeline a bot started, so the Router never reviews them. When such an MR's current
+commit has passed pipelines but none started by a person, this job starts one more, as the
+token's owner, exactly once per commit. That only re-runs the checks; the merge rules above
+are unchanged, and the Router can still rate the fix anything from Hands-off to Blocked.
 """
 
 from __future__ import annotations
@@ -81,6 +87,38 @@ def why_not(pid: str, mr: dict) -> str | None:
     return None
 
 
+def needs_rerun(pid: str, mr: dict, me: str) -> str | None:
+    """Why an agent-opened MR's pipeline should be re-run as a person, or None."""
+    iid = mr["iid"]
+    _, full = api("GET", f"/projects/{pid}/merge_requests/{iid}")
+    pipe = full.get("head_pipeline") or {}
+    if full.get("draft") or pipe.get("sha") != full.get("sha") or pipe.get("status") in ("running", "pending", "created"):
+        return None
+    _, pipes = api("GET", f"/projects/{pid}/merge_requests/{iid}/pipelines?per_page=50")
+    current = [p["id"] for p in pipes if p.get("sha") == full.get("sha")]
+    for p in current:
+        _, detail = api("GET", f"/projects/{pid}/pipelines/{p}")
+        if (detail.get("user") or {}).get("username") == me:
+            return None  # already re-run once for this commit
+    _, notes = api("GET", f"/projects/{pid}/merge_requests/{iid}/notes?sort=desc&order_by=created_at&per_page=50")
+    if any(n["author"]["username"] == ROUTER_ACCOUNT and set(map(int, re.findall(r"Pipeline (\d+)", n.get("body", "")))) & set(current)
+           for n in notes):
+        return None  # the Router already reviewed this commit
+    return f"pipelines {current} for {full.get('sha', '')[:8]} were all started by a bot, so the Router never ran"
+
+
+def rerun_agent_mrs(pid: str) -> None:
+    """Start one person-owned pipeline on agent-opened fix MRs, so the Router reviews them."""
+    _, me = api("GET", "/user")
+    _, mrs = api("GET", f"/projects/{pid}/merge_requests?state=opened&labels=triage&per_page=50")
+    for mr in mrs or []:
+        reason = needs_rerun(pid, mr, me.get("username", ""))
+        if not reason:
+            continue
+        status, res = api("POST", f"/projects/{pid}/merge_requests/{mr['iid']}/pipelines")
+        print(f"!{mr['iid']}: {reason}; re-ran as {me.get('username')}: {status} pipeline {(res or {}).get('id')}")
+
+
 def token_from_secret_manager() -> str | None:
     """The merge token, fetched keylessly as ea-merger (main pipelines only)."""
     import base64
@@ -110,6 +148,7 @@ def main() -> int:
         print("EA_GITLAB_TOKEN is not set: nothing merges without a person")
         return 0
     pid = urllib.parse.quote(os.environ["CI_PROJECT_ID"], safe="")
+    rerun_agent_mrs(pid)
     _, mrs = api("GET", f"/projects/{pid}/merge_requests?state=opened&target_branch={os.environ.get('CI_DEFAULT_BRANCH', 'main')}"
                         "&labels=autonomy::hands-off&per_page=50")
     if not mrs:

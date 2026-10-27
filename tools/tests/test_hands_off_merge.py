@@ -92,3 +92,41 @@ def test_card_for_another_passed_pipeline_of_the_same_commit_counts(monkeypatch,
     old = [{"body": CARD.replace("Pipeline 77", "Pipeline 70"), "author": {"username": "ai-ea-autonomy-router-gitlab-ai-hackathon"}}]
     monkeypatch.setattr(hom, "api", fake_api(notes=old))
     assert "current commit" in hom.why_not("1", mr)
+
+
+def rerun_api(pipeline_users, notes=(), head_status="success"):
+    calls = []
+
+    def api(method, path, body=None):
+        calls.append((method, path))
+        if path.endswith("/notes?sort=desc&order_by=created_at&per_page=50"):
+            return 200, list(notes)
+        if "/merge_requests/9/pipelines?" in path:
+            return 200, [{"id": 100 + i, "sha": "abc"} for i in range(len(pipeline_users))] + [{"id": 1, "sha": "old"}]
+        if "/pipelines/" in path:
+            i = int(path.rsplit("/", 1)[1]) - 100
+            return 200, {"user": {"username": pipeline_users[i]}}
+        return 200, {"sha": "abc", "draft": False, "head_pipeline": {"id": 100, "status": head_status, "sha": "abc"}}
+    return api, calls
+
+
+def test_reruns_an_agent_mr_whose_pipelines_a_bot_started(monkeypatch):
+    api, _ = rerun_api(["duo-developer-bot"])
+    monkeypatch.setattr(hom, "api", api)
+    assert "started by a bot" in hom.needs_rerun("1", {"iid": 9}, "shivansh193")
+
+
+def test_reruns_at_most_once_per_commit_and_not_after_the_router_reviewed(monkeypatch):
+    api, _ = rerun_api(["duo-developer-bot", "shivansh193"])
+    monkeypatch.setattr(hom, "api", api)
+    assert hom.needs_rerun("1", {"iid": 9}, "shivansh193") is None
+    reviewed = [{"body": CARD.replace("Pipeline 77", "Pipeline 100"), "author": {"username": hom.ROUTER_ACCOUNT}}]
+    api, _ = rerun_api(["duo-developer-bot"], notes=reviewed)
+    monkeypatch.setattr(hom, "api", api)
+    assert hom.needs_rerun("1", {"iid": 9}, "shivansh193") is None
+
+
+def test_waits_while_a_pipeline_is_still_running(monkeypatch):
+    api, _ = rerun_api(["duo-developer-bot"], head_status="running")
+    monkeypatch.setattr(hom, "api", api)
+    assert hom.needs_rerun("1", {"iid": 9}, "shivansh193") is None

@@ -5,7 +5,8 @@
 # - See: https://docs.gitlab.com/ee/user/duo_agent_platform/security_threats/
 #
 # Triage agent (secure stage).
-# Trigger: Pipeline events -> Passed, on merge request pipelines.
+# Trigger: Pipeline events -> Passed, on merge request pipelines and on pushes to main
+# (where a newly published advisory shows up against dependencies already in production).
 # Reads the dependency findings with their reachability and runtime-hit evidence,
 # posts a verdict per advisory, and opens a fix MR for findings that are (or may be)
 # reachable, using ONLY the verified edits CI precomputed (reports/fixes.json). The
@@ -55,8 +56,10 @@ prompts:
         {{goal}}
         ---
         Steps:
-        1. If object_attributes.status is not "success" or the payload has no merge_request,
-           reply `skip: not a passed merge request pipeline` and make no tool calls.
+        1. Continue only if object_attributes.status is "success" and EITHER the payload has a
+           merge_request (an MR pipeline) OR object_attributes.ref is "main" and
+           object_attributes.source is "push" (a main pipeline). Otherwise reply
+           `skip: not a passed merge request or main pipeline` and make no tool calls.
         2. In the payload's builds find "autonomy-decision" and "dependency-audit-reachability".
            Call gitlab_api_get on
            /api/v4/projects/{{project_id}}/jobs/<autonomy-decision id>/artifacts/reports/bundle.json
@@ -80,7 +83,10 @@ prompts:
               verified edits CI computed with `uv lock --upgrade-package`. This MR goes through
               the same evidence, risk and autonomy checks as any other change."
            If one exists, note its iid instead.
-        6. Call create_merge_request_note on the triggering merge request with:
+           On a main pipeline, also add to the description: "Found on main by pipeline
+           <object_attributes.id>: the vulnerable version is in production now."
+        6. Only for an MR pipeline (skip this step on a main pipeline), call
+           create_merge_request_note on the triggering merge request with:
            ### Security triage
            | Advisory | Package | New in this MR | Static reachability | Runtime hits | Verdict |
            (one row per finding; New = the finding's `new` field)
