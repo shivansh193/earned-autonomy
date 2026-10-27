@@ -76,6 +76,38 @@ default:
       when: never
     - when: on_success
 
+# Evidence jobs (tests, replay, browser tests, dependency audit) run on an MR only when it
+# changes something that can run or ship. A documentation-only MR skips them: they can't
+# change, so the energy isn't spent (about 6 of the 7 CI minutes per docs MR). The engine
+# accepts the missing evidence only when every changed file is documentation; anything this
+# list misses is still skipped here but then Blocked for lack of evidence, never waved through.
+.evidence:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "backend/**/*"
+        - "frontend/**/*"
+        - "packages/**/*"
+        - "infra/**/*"
+        - "tools/**/*"
+        - "ci/**/*"
+        - "scripts/**/*"
+        - "hooks/**/*"
+        - "traffic/**/*"
+        - "_upstream/**/*"
+        - ".*"
+        - ".*/**/*"
+        - "*.toml"
+        - "*.lock"
+        - "*.json"
+        - "*.yml"
+        - "*.yaml"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - when: on_success
+
 .postgres:
   services:
     - name: postgres:18
@@ -83,7 +115,7 @@ default:
 
 dependency-audit-reachability:
   stage: secure
-  extends: .not-scheduled
+  extends: .evidence
   variables:
     GIT_DEPTH: "0"  # the MR's target-branch commit, to tell new findings from pre-existing ones
   script:
@@ -95,7 +127,7 @@ dependency-audit-reachability:
 
 test:
   stage: verify
-  extends: [.postgres, .not-scheduled]
+  extends: [.postgres, .evidence]
   needs: []
   script:
     - bash ci/verify-tests.sh
@@ -108,7 +140,7 @@ test:
 
 replay-recorded-traffic:
   stage: verify
-  extends: [.postgres, .not-scheduled]
+  extends: [.postgres, .evidence]
   needs: [dependency-audit-reachability]
   script:
     - bash ci/verify-replay.sh
@@ -121,7 +153,7 @@ replay-recorded-traffic:
 # Playwright tests against the backend serving that build.
 frontend-check:
   stage: verify
-  extends: .not-scheduled
+  extends: .evidence
   image: oven/bun:1.3
   needs: []
   cache: []
@@ -135,7 +167,7 @@ frontend-check:
 
 frontend-e2e:
   stage: verify
-  extends: .not-scheduled
+  extends: .evidence
   image: mcr.microsoft.com/playwright:v1.63.0-noble
   services:
     - name: postgres:18
@@ -173,11 +205,15 @@ autonomy-decision:
       aud: https://gitlab.com
   variables:
     GIT_DEPTH: "0"  # diff against the MR's target branch, mapped to changed functions and routes
-  needs:
-    - dependency-audit-reachability
-    - test
-    - replay-recorded-traffic
-    - frontend-e2e
+  needs:  # optional: a documentation-only MR doesn't run them (see .evidence)
+    - job: dependency-audit-reachability
+      optional: true
+    - job: test
+      optional: true
+    - job: replay-recorded-traffic
+      optional: true
+    - job: frontend-e2e
+      optional: true
     - job: configure-plan
       optional: true
     - job: image-build-check

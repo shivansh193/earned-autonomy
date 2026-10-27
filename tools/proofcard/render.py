@@ -113,10 +113,14 @@ def render(bundle: dict[str, Any], *, audit_url: str | None = None) -> str:
 
     tests = bundle.get("tests")
     out += ["", "### Tests", "",
-            "_No test results._" if tests is None else
+            ("_Not run: documentation only._" if (bundle.get("change_summary") or {}).get("docs_only") else "_No test results._")
+            if tests is None else
             f"{tests.get('passed', 0)} passed, {tests.get('failed', 0)} failed, {tests.get('skipped', 0)} skipped"]
-    out += ["", "### Security (static reachability + runtime hits)", "", *_security(bundle.get("security"))]
-    out += ["", "### Behaviour (replay of recorded traffic)", "", *_replay(bundle.get("replay"))]
+    skipped = ["_Not run: documentation only._"] if (bundle.get("change_summary") or {}).get("docs_only") else None
+    out += ["", "### Security (static reachability + runtime hits)", "",
+            *(skipped if skipped and bundle.get("security") is None else _security(bundle.get("security")))]
+    out += ["", "### Behaviour (replay of recorded traffic)", "",
+            *(skipped if skipped and bundle.get("replay") is None else _replay(bundle.get("replay")))]
     out += ["", "### Infrastructure", "", *_infra(bundle.get("infra"), cs.get("infra_touched", False))]
     out += ["", "### Scope", "",
             f"{cs.get('files', 0)} files; routes touched: "

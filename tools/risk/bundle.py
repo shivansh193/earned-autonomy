@@ -259,6 +259,16 @@ def ui_areas(changed_files: list[str]) -> list[str]:
     return sorted(out)
 
 
+def docs_only(changed_files: list[str]) -> bool:
+    """True when every changed file is documentation: nothing that can run or ship changed.
+
+    CI skips tests, replay and browser tests for such MRs (they can't change), and the
+    engine accepts the missing evidence only when this holds. If CI ever skips them for a
+    change that isn't docs-only, the evidence is missing and the change is Blocked."""
+    return bool(changed_files) and all(
+        f.endswith(".md") or f.startswith(("docs/", "img/")) or f == "LICENSE" for f in changed_files)
+
+
 def build_bundle(
     *,
     mr_iid: int | None,
@@ -289,6 +299,7 @@ def build_bundle(
             "changed_files": changed_files[:200],
             "routes_touched": routes,
             "infra_touched": infra_touched,
+            "docs_only": docs_only(changed_files),
         },
         "areas": areas,
         "tests": tests,

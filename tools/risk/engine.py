@@ -55,8 +55,13 @@ def rule_score(bundle: dict[str, Any], rules: Rules | None = None) -> Score:
     r = rules or Rules()
     s = Score()
 
+    docs = (bundle.get("change_summary") or {}).get("docs_only") is True
     tests = bundle.get("tests")
-    if tests is None:
+    if docs and tests is None and bundle.get("replay") is None:
+        # Nothing that runs or ships changed, so tests and replay can't tell us anything:
+        # CI didn't spend the energy on them.
+        s.add("evidence.not_needed", 0.0, "documentation only: tests, replay and browser tests not run")
+    elif tests is None:
         s.blocked.append("no test results")
     elif tests.get("failed", 0) > 0:
         s.blocked.append(f"{tests['failed']} failing test(s)")
@@ -82,7 +87,9 @@ def rule_score(bundle: dict[str, Any], rules: Rules | None = None) -> Score:
                   f"{name}: only via a call on an untyped receiver")
 
     replay = bundle.get("replay")
-    if replay is None:
+    if replay is None and docs:
+        pass
+    elif replay is None:
         s.add("replay.missing", r.missing_replay, "no replay evidence for this change")
     else:
         regressions = replay.get("status_mismatches", 0) + replay.get("body_diffs_real", 0)
