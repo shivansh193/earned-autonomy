@@ -352,3 +352,20 @@ def test_a_refused_request_that_now_succeeds_blocks():
     assert "access widened" in d["autonomy"]["blocked_reasons"][0]
     tighter = {**report, "status_mismatch_details": report["status_mismatch_details"][1:]}
     assert decide(_bundle_for(replay=replay_summary(tighter, None)), dict(ledger.INITIAL), {})["autonomy"]["level"] != "blocked"
+
+
+def test_docs_only_change_needs_no_tests_or_replay():
+    b = bundle(routes=(), replay=None, changed=("README.md", "docs/stages.md", "img/x.png"))
+    b["tests"] = None
+    b.update(decide(b, TH, {}))
+    assert b["autonomy"]["level"] == "hands_off" and b["risk"]["final"] == 0.0
+    assert "_Not run: documentation only._" in render(b)
+
+
+def test_skipped_evidence_on_a_code_change_still_blocks():
+    # CI's path list missing a file must never wave a code change through.
+    b = bundle(routes=(), replay=None, changed=("README.md", "newdir/app.py"))
+    b["tests"] = None
+    assert decide(b, TH, {})["autonomy"]["blocked_reasons"] == ["no test results"]
+    from risk.bundle import docs_only
+    assert not docs_only([]) and not docs_only(["docs/x.md", "uv.lock"]) and docs_only(["LICENSE", "a/b.md"])
