@@ -1,5 +1,7 @@
 # See it for yourself
 
+> Winner of **Most Stages Covered** at GitLab Transcend "Life After Code" ([Devpost](https://devpost.com/software/earned-autonomy-li8qxm)). Every stage it covers has a real run in the table below.
+
 Ten minutes, no account needed. Each claim below has one link that shows it happening, and
 every link is a real run on this project (GitLab Transcend "Life After Code", Path B, the 46k-star
 [fastapi/full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template)).

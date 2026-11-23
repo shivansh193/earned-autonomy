@@ -1,5 +1,7 @@
 # Earned Autonomy
 
+> 🏆 **Winner, Most Stages Covered** (Path B: Bring Your Own) at GitLab Transcend "Life After Code", 2026 · [Devpost](https://devpost.com/software/earned-autonomy-li8qxm) · [demo video](https://youtu.be/_FYzcQnvD9M)
+
 **Autonomy isn't a setting. It's earned, per change.** Every merge request gets evidence, a risk score and an autonomy level, and every autonomous decision ships with its proof.
 
 Three things you can check in a few minutes ([CLAIMS.md](CLAIMS.md) has one link for each):
